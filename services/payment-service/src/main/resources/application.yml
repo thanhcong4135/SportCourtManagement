@@ -1,0 +1,87 @@
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:mysql://localhost:${PAYMENT_DB_PORT:${MYSQL_PAYMENT_PORT:3307}}/payment_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: 123456
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${kafka.bootstrap-servers}
+    producer:
+      acks: all
+      retries: 10
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: payment-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        isolation.level: read_committed
+
+server:
+  port: 8083
+
+app:
+  security:
+    jwt:
+      secret: ${APP_SECURITY_JWT_SECRET:change-this-dev-secret-to-a-long-random-value-32b}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+payment:
+  deposit:
+    ratio: 0.5
+  callback:
+    shared-secret: ${PAYMENT_CALLBACK_SHARED_SECRET:dev-payment-callback-secret}
+  provider:
+    type: ${PAYMENT_PROVIDER_TYPE:MOCK}
+    mock:
+      checkout-base-url: ${PAYMENT_PROVIDER_MOCK_CHECKOUT_BASE_URL:http://localhost:8083/mock-pay}
+
+kafka:
+  bootstrap-servers: localhost:9092
+  consumer:
+    retry:
+      max-attempts: 3
+      backoff-ms: 1000
+    dlq:
+      suffix: .dlq
+    booking:
+      enabled: true
+      group-id: payment-service-booking
+  topics:
+    booking-events: booking.events
+    payment-events: payment.events
+
+outbox:
+  publisher:
+    enabled: true
+    fixed-delay-ms: 5000
+    batch-size: 100
+    max-retries: 10
+    initial-retry-delay-seconds: 5
+    max-retry-delay-seconds: 300

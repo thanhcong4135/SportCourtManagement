@@ -1,0 +1,867 @@
+# WORK LOG (User + Codex)
+
+File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservices_v3.pdf`.
+
+## Muc dich
+- Luu lai cac yeu cau cua ban va hanh dong da thuc hien.
+- Ghi ro muc dich cua tung buoc de de theo doi tien do.
+
+## Quy uoc cap nhat
+- Moi khi ban giao task moi, se them 1 muc moi.
+- Moi muc nen co: yeu cau, muc dich, hanh dong, file anh huong, ghi chu.
+
+## Nhat ky
+
+### 2026-02-26 - Khoi tao work log
+- Yeu cau: Tao 1 file de luu lai va mo ta qua trinh lam viec giua ban va toi.
+- Muc dich: Theo doi lich su task, muc tieu tung hanh dong, va cac thay doi lien quan.
+- Hanh dong: Tao file `WORK_LOG.md` tai thu muc goc du an (cung cap voi file plan PDF).
+- File anh huong: `WORK_LOG.md`
+- Ghi chu: Tu cac yeu cau tiep theo, se tiep tuc append them entry vao file nay.
+
+### 2026-02-26 - Chuyen sang giai doan test core-service
+- Yeu cau: Tiep tuc giai doan test sau khi hoan thanh code core-service.
+- Muc dich: Xac nhan cac API chinh va cac rule nghiep vu (availability, deposit, confirm, batch flow) hoat dong dung.
+- Hanh dong: Kiem tra compile `core-service` thanh cong va chuan bi test checklist/thu tu test cho manual testing (Thunder Client).
+- File anh huong: `WORK_LOG.md`
+- Ghi chu: Se uu tien test smoke + booking flow + batch flow + case loi truoc khi viet integration test/automation.
+
+### 2026-02-26 - Bat dau manual test core-service (Thunder Client)
+- Yeu cau: Tiep tuc theo thu tu test da de xuat.
+- Muc dich: Cung cap bo request test tung buoc de user tu kiem tra flow chinh cua core-service.
+- Hanh dong: Chuan bi huong dan test smoke -> master data -> single booking -> batch booking, kem body mau va expected result.
+- File anh huong: `WORK_LOG.md`
+- Ghi chu: Se dung du lieu mau co the copy/paste, uu tien de user test nhanh tren may local.
+
+### 2026-02-26 - Tao test script huong dan cho Thunder Client
+- Yeu cau: Xac nhan tiep tuc giai doan test.
+- Muc dich: Co tai lieu test theo thu tu, copy/paste duoc ngay cho core-service.
+- Hanh dong: Tao file `docs/core-service-thunder-test.md` gom full flow: tao venue/court, single booking, batch booking, negative cases, scheduler timeout.
+- File anh huong: `WORK_LOG.md`, `docs/core-service-thunder-test.md`
+- Ghi chu: Co the dung file nay lam checklist test regression cho core-service.
+
+### 2026-02-26 - Viet integration test cho tat ca service trong core-service
+- Yeu cau: Viet integration test cho tat ca cac service.
+- Muc dich: Tu dong hoa kiem thu service layer (`VenueService`, `CourtService`, `BookingService`) va bao ve cac rule nghiep vu quan trong.
+- Hanh dong:
+  - Them test dependency H2 trong `services/core-service/pom.xml`.
+  - Tao cau hinh test profile `services/core-service/src/test/resources/application-test.yml` (H2, disable Flyway, disable scheduling).
+  - Tao 3 integration test:
+    - `services/core-service/src/test/java/com/sportcourt/core/service/VenueServiceIntegrationTest.java`
+    - `services/core-service/src/test/java/com/sportcourt/core/service/CourtServiceIntegrationTest.java`
+    - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+  - Kiem tra build qua buoc `test-compile`.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/core-service/pom.xml`
+  - `services/core-service/src/test/resources/application-test.yml`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/VenueServiceIntegrationTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/CourtServiceIntegrationTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+- Ghi chu: Chua chay duoc `mvn test` trong sandbox hien tai vi Maven can ghi vao `C:\\Users\\ADMIN\\.m2` (bi AccessDenied). Da xac nhan `mvn -DskipTests test-compile` pass.
+
+### 2026-03-11 - Thuc hien buoc 1: Booking query API + paging contract
+- Yeu cau: Thuc hien buoc 1 (chuan hoa API core).
+- Muc dich: Bo sung API doc booking (chi tiet + danh sach loc) de day du read/write flow va on dinh contract cho UI/Gateway.
+- Hanh dong:
+  - Them endpoint:
+    - `GET /api/core/bookings/{id}`
+    - `GET /api/core/bookings?customerId&courtId&status&from&to&page&size&sort`
+  - Them paging contract `PageResponse`.
+  - Mo rong `BookingService` voi `getById(...)`, `list(...)` va filter dong theo customer/court/status/time range overlap.
+  - Mo rong `BookingRepository` thanh `JpaSpecificationExecutor`.
+  - Cap nhat test query trong `BookingServiceIntegrationTest`.
+  - Cap nhat guide test trong `docs/core-service-thunder-test.md`.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/core-service/src/main/java/com/sportcourt/core/controller/BookingController.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/BookingService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/repository/BookingRepository.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/api/PageResponse.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+  - `docs/core-service-thunder-test.md`
+- Ghi chu: Chua verify build trong sandbox do Maven khong truy cap duoc remote repo (`Permission denied: getsockopt`); can chay local `mvn test` de xac nhan pass.
+
+### 2026-03-11 - Thuc hien buoc 2: JWT auth + role cho core-service
+- Yeu cau: Tien hanh buoc 2 sau khi hoan tat buoc 1.
+- Muc dich: Bo sung xac thuc/phan quyen co ban de bo endpoint booking khong con `permitAll`.
+- Hanh dong:
+  - Them dependency `spring-boot-starter-oauth2-resource-server`.
+  - Nang cap `SecurityConfig`:
+    - Resource server JWT (Bearer token, stateless).
+    - Mapping role tu claim `roles` -> `ROLE_*`.
+    - Rule URL theo role (`ADMIN/OWNER/CUSTOMER`).
+  - Them JWT decoder HS256 theo secret `app.security.jwt.secret`.
+  - Cap nhat `BookingController`:
+    - Role `CUSTOMER` bi rang buoc ownership theo `sub`.
+    - Draft APIs voi `CUSTOMER` se dung `sub` thay cho `customerId` trong request.
+  - Cap nhat docs OpenAPI/Test ve auth model va role policy.
+  - Bo sung secret cho test profile.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/core-service/pom.xml`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/SecurityConfig.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/controller/BookingController.java`
+  - `services/core-service/src/main/resources/application.yml`
+  - `services/core-service/src/test/resources/application-test.yml`
+  - `docs/core-service-openapi.md`
+  - `docs/core-service-thunder-test.md`
+- Ghi chu: Can chay local `mvn test` de verify end-to-end vi sandbox khong pull duoc dependency tu Maven Central.
+
+### 2026-03-11 - Trien khai OpenAPI + Swagger UI cho core-service
+- Yeu cau: Thuc hien buoc OpenAPI/Swagger cho toan bo endpoint.
+- Muc dich: Co API contract chuan va giao dien doc/thu API cho team frontend/gateway.
+- Hanh dong:
+  - Them dependency `springdoc-openapi-starter-webmvc-ui` vao `pom.xml`.
+  - Them cau hinh metadata OpenAPI trong `OpenApiConfig`.
+  - Them path docs vao `application.yml`:
+    - `/api-docs`
+    - `/swagger-ui.html`
+  - Them tai lieu huong dan truy cap docs trong `docs/core-service-openapi.md`.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/core-service/pom.xml`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/OpenApiConfig.java`
+  - `services/core-service/src/main/resources/application.yml`
+  - `docs/core-service-openapi.md`
+- Ghi chu: Can chay local de tai dependency moi va verify endpoint docs hoat dong.
+
+### 2026-03-11 - Hoan thien buoc 3 (Outbox pattern) va ra soat phan con thieu
+- Yeu cau: Tiep tuc buoc 3 va kiem tra con thieu gi de hoan thien.
+- Muc dich: Dam bao event booking duoc ghi outbox trong transaction va co publisher retry an toan.
+- Hanh dong:
+  - Them outbox persistence:
+    - `OutboxEvent`, `OutboxEventStatus`, `OutboxEventRepository`
+    - Flyway migration `V4__outbox_event.sql`
+  - Them `BookingOutboxService` de enqueue booking event vao outbox.
+  - Refactor `BookingService` + `BookingTimeoutScheduler` sang enqueue outbox thay vi publish truc tiep Kafka.
+  - Them `OutboxPublisherScheduler` (poll pending -> publish -> SENT/FAILED + retry backoff).
+  - Chinh `BookingEventPublisher` thanh producer de scheduler goi `publishRaw(...)`.
+  - Bo sung test:
+    - `BookingServiceIntegrationTest` kiem tra co tao outbox event.
+    - `OutboxPublisherSchedulerTest` cho success/retry/fail.
+  - Bo sung tai lieu `docs/core-service-outbox.md`.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/core-service/src/main/resources/db/migration/V4__outbox_event.sql`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/OutboxEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/enums/OutboxEventStatus.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/repository/OutboxEventRepository.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingOutboxService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingEventPublisher.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/BookingService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/scheduler/BookingTimeoutScheduler.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/scheduler/OutboxPublisherScheduler.java`
+  - `services/core-service/src/main/resources/application.yml`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/scheduler/OutboxPublisherSchedulerTest.java`
+  - `docs/core-service-outbox.md`
+- Ghi chu: Khong verify compile trong sandbox do thieu parent POM trong local cache va network bi chan; can chay local `mvn test`.
+
+### 2026-03-12 - Hoan thanh buoc 4 (Reliability gate cho core-service)
+- Yeu cau: "Ok hay tien hanh toan bo buoc 4".
+- Muc dich: Hardening luong event core-service truoc khi tich hop tiep cac service khac.
+- Hanh dong:
+  - Verify gate: chay `mvn "-Dmaven.repo.local=.m2repo" test` thanh cong.
+  - Them test end-to-end outbox: tao draft -> outbox scheduler publish -> event `SENT`.
+  - Tang reliability Kafka:
+    - Producer: `acks=all`, `enable.idempotence=true`.
+    - Consumer infra: `DefaultErrorHandler` + `DeadLetterPublishingRecoverer` (DLQ suffix `.dlq`).
+    - Them `eventId` cho booking event va header `event-id` khi publish.
+  - Bo sung idempotency utility:
+    - Bang `consumed_event` (Flyway `V5__consumed_event.sql`).
+    - `IdempotentEventService` de danh dau event da xu ly (duplicate-safe bang unique constraint).
+    - `BookingEventAuditConsumer` (optional, `autoStartup=false`).
+  - Bo sung observability:
+    - Metrics outbox pending/failed + publish success/failure.
+    - Health indicator `outbox` (pending, failed, oldest pending age, threshold).
+  - Cap nhat tai lieu cho buoc reliability.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/KafkaReliabilityConfig.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/ConsumedEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingEventPublisher.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingOutboxService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/consumer/BookingEventAuditConsumer.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/monitoring/OutboxMetrics.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/monitoring/OutboxHealthIndicator.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/repository/ConsumedEventRepository.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/repository/OutboxEventRepository.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/scheduler/OutboxPublisherScheduler.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/IdempotentEventService.java`
+  - `services/core-service/src/main/resources/application.yml`
+  - `services/core-service/src/main/resources/db/migration/V5__consumed_event.sql`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/IdempotentEventServiceTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/scheduler/OutboxPublisherSchedulerTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/monitoring/OutboxHealthIndicatorTest.java`
+  - `docs/core-service-outbox.md`
+  - `docs/core-service-reliability-step4.md`
+- Ghi chu: Buoc 4 da xong o muc code-level gate; audit consumer dang tat mac dinh.
+  - Verify lai sau khi clean target: `mvn "-Dmaven.repo.local=.m2repo" clean test` => BUILD SUCCESS, 22 tests pass.
+
+### 2026-03-12 - Thuc hien buoc 5 (payment-service MVP + Kafka integration)
+- Yeu cau: "Sau buoc 4 thi tiep tuc buoc 5".
+- Muc dich: Co `payment-service` rieng de xu ly dat coc va phat event ket qua thanh toan.
+- Hanh dong:
+  - Khoi tao skeleton `payment-service` (Spring Boot + JPA + Kafka + Flyway + OpenAPI).
+  - Tao model thanh toan:
+    - `PaymentTransaction`, `PaymentTransactionStatus`, `PaymentType`
+    - Repository + migration `V1__init.sql`.
+  - Implement service/payment API:
+    - `POST /api/payments/deposits/initiate`
+    - `POST /api/payments/callback`
+    - `GET /api/payments/{id}`
+    - `GET /api/payments/booking/{bookingId}`
+  - Them Kafka flow:
+    - Consume `booking.events` (`BOOKING_DRAFT_CREATED`) de auto tao giao dich coc.
+    - Publish `payment.events` (`DEPOSIT_SUCCEEDED`, `DEPOSIT_FAILED`) sau callback.
+  - Them Docker compose infra cho `mysql-payment` + `payment-service`.
+  - Them integration test cho `PaymentService`.
+  - Bo sung tai lieu huong dan `docs/payment-service-step5.md`.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/payment-service/pom.xml`
+  - `services/payment-service/Dockerfile`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/PaymentServiceApplication.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/config/KafkaConfig.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/controller/PaymentController.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/consumer/BookingEventConsumer.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/domain/PaymentTransaction.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/domain/enums/PaymentTransactionStatus.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/domain/enums/PaymentType.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/dto/CreateDepositPaymentRequest.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/dto/PaymentCallbackRequest.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/dto/PaymentTransactionResponse.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/event/PaymentEvent.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/event/PaymentEventType.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/event/PaymentEventPublisher.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/repository/PaymentTransactionRepository.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/service/PaymentService.java`
+  - `services/payment-service/src/main/resources/application.yml`
+  - `services/payment-service/src/main/resources/db/migration/V1__init.sql`
+  - `services/payment-service/src/test/resources/application-test.yml`
+  - `services/payment-service/src/test/java/com/sportcourt/payment/service/PaymentServiceIntegrationTest.java`
+  - `infra/docker/docker-compose.yml`
+  - `docs/payment-service-step5.md`
+- Ghi chu: Sau buoc nay can bo sung consumer `payment.events` phia `core-service` neu muon cap nhat booking tu dong theo callback.
+
+### 2026-03-12 - Trien khai core-service consume payment.events
+- Yeu cau: Trien khai `core-service` consume `payment.events` de cap nhat booking theo callback thanh toan.
+- Muc dich: Dong bo trang thai booking theo ket qua thanh toan tu `payment-service` theo event-driven flow.
+- Hanh dong:
+  - Them payment event contract trong core-service:
+    - `PaymentEvent`, `PaymentEventType`.
+  - Them consumer + processor:
+    - `PaymentEventConsumer` consume topic `payment.events`.
+    - `PaymentEventProcessor` xu ly idempotent + apply booking update trong transaction.
+  - Mo rong `BookingService`:
+    - Them `applyPaymentEvent(...)`.
+    - `DEPOSIT_SUCCEEDED` -> cap nhat `paymentStatus=DEPOSITED`, cap nhat `depositPaid`, auto-confirm neu booking dang `DRAFT` (configurable).
+    - `DEPOSIT_FAILED` -> cap nhat `paymentStatus=FAILED` (khong downgrade neu da `DEPOSITED/PAID`).
+    - Emit outbox event phu hop (`BOOKING_DEPOSITED`, `BOOKING_CONFIRMED`, `BOOKING_PAYMENT_FAILED`).
+  - Cap nhat config:
+    - `booking.payment.auto-confirm-on-deposit-success`.
+    - `kafka.topics.payment-events`.
+    - `kafka.consumer.payment.*`.
+  - Cap nhat test:
+    - Them test payment-event trong `BookingServiceIntegrationTest`.
+    - Them `PaymentEventProcessorTest`.
+    - Tat payment consumer trong `application-test.yml`.
+  - Verify:
+    - `mvn "-Dmaven.repo.local=.m2repo" test` (core-service) => BUILD SUCCESS, 26 tests pass.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/PaymentEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/PaymentEventType.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingEventType.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/BookingService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/PaymentEventProcessor.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/consumer/PaymentEventConsumer.java`
+  - `services/core-service/src/main/resources/application.yml`
+  - `services/core-service/src/test/resources/application-test.yml`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/PaymentEventProcessorTest.java`
+- Ghi chu: Flow nay su dung idempotency table `consumed_event` da co tu buoc 4.
+
+### 2026-03-12 - Tiep tuc buoc tiep theo: hoan thien auth-service va gate test
+- Yeu cau: "Ok hay tien hanh buoc tiep theo di" sau khi thong nhat phan RBAC.
+- Muc dich: Day auth-service den trang thai co the tiep tuc tich hop voi gateway va cac service khac.
+- Hanh dong:
+  - Kiem tra lai test auth-service va sua assertion de dung voi hanh vi JWT thuc te (token co the giong nhau neu issue trong cung 1 giay).
+  - Cap nhat test refresh:
+    - Khong ep access token phai khac 100%.
+    - Verify claims trong access token moi.
+    - Verify refresh token cu khong duoc tai su dung (401).
+  - Chay lai gate test:
+    - `services/auth-service`: `mvn "-Dmaven.repo.local=.m2repo" test` => pass.
+    - `services/core-service`: `mvn "-Dmaven.repo.local=.m2repo" test` => pass.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/auth-service/src/test/java/com/sportcourt/auth/service/AuthServiceIntegrationTest.java`
+- Ghi chu: Da xac nhan 2 service chinh (`core-service`, `auth-service`) deu pass test trong local env.
+
+### 2026-03-12 - Chuan hoa auth-service voi Lombok (giam boilerplate getter/setter)
+- Yeu cau: Dung Lombok de code gon hon thay vi viet tay getter/setter.
+- Muc dich: Giam boilerplate, de doc source va bao tri nhanh hon, nhung van giu an toan cho JPA entity.
+- Hanh dong:
+  - Them dependency Lombok vao `services/auth-service/pom.xml`.
+  - Refactor entity auth-service sang annotation Lombok an toan cho JPA:
+    - `@Getter`, `@Setter` (khong dung `@Data`).
+  - Ap dung cho:
+    - `Role`
+    - `UserAccount`
+    - `RefreshToken`
+  - Chay verify: `mvn "-Dmaven.repo.local=.m2repo" test` (auth-service) => pass.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/auth-service/pom.xml`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/domain/Role.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/domain/UserAccount.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/domain/RefreshToken.java`
+- Ghi chu: Giu `Entity` o muc `@Getter/@Setter` de tranh rui ro `equals/hashCode/toString` voi lazy relation.
+
+### 2026-03-12 - Dong bo core-service voi Lombok (an toan cho JPA)
+- Yeu cau: Dong bo style sau khi auth-service da chuyen sang Lombok.
+- Muc dich: Giam boilerplate getter/setter trong core-service de source gon hon va de bao tri.
+- Hanh dong:
+  - Refactor cac entity/event class sang `@Getter` + `@Setter` (khong dung `@Data`):
+    - `Court`, `Venue`, `Booking`, `OutboxEvent`, `ConsumedEvent`
+    - `BookingEvent`, `PaymentEvent`
+  - Loai bo getter/setter viet tay tuong ung.
+  - Chay verify: `mvn "-Dmaven.repo.local=.m2repo" test` (core-service) => pass.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/Court.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/Venue.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/Booking.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/OutboxEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/ConsumedEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/PaymentEvent.java`
+- Ghi chu: Tiep tuc giu nguyen tac khong dung `@Data` tren `Entity` de tranh side effect voi JPA relation.
+
+### 2026-03-12 - Tich hop Gateway JWT + logout/revoke + integration test theo role
+- Yeu cau: Tiep tuc buoc tiep theo theo thu tu da thong nhat:
+  1) Gateway xac thuc JWT thong nhat voi auth-service.
+  2) Hoan thien logout/revoke refresh token trong auth-service.
+  3) Viet integration test login -> goi core API theo role qua gateway.
+- Muc dich: Dong bo security contract o edge (gateway), hoan thien token lifecycle, va co test bao ve luong role-based access.
+- Hanh dong:
+  - **api-gateway**
+    - Them OAuth2 resource server cho gateway.
+    - Security rule:
+      - `POST /api/auth/register|login|refresh|logout` permitAll.
+      - `GET /api/core/venues|courts|availability` permitAll.
+      - `POST /api/core/venues|courts` chi `ADMIN|OWNER`.
+      - `/api/core/bookings/**` chi `CUSTOMER|OWNER|ADMIN`.
+    - Them JWT decoder HS256 dung chung secret `app.security.jwt.secret`.
+    - Chuyen route URI sang property de test/integration linh hoat:
+      - `app.downstream.auth-service-url`
+      - `app.downstream.core-service-url`
+    - Them gateway integration test dung `MockWebServer`:
+      - Login customer -> duoc goi booking API, bi chan o venues POST.
+      - Login owner -> duoc goi venues POST.
+  - **auth-service**
+    - Them endpoint `POST /api/auth/logout` (nhan `RefreshTokenRequest`, tra `204 No Content`).
+    - Implement revoke refresh token theo hash (idempotent, no-op neu token khong ton tai/da revoke).
+    - Mo rong auth integration test:
+      - Logout xong thi refresh token cu khong dung lai duoc (`401`).
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/api-gateway/pom.xml`
+  - `services/api-gateway/src/main/resources/application.yml`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/SecurityConfig.java`
+  - `services/api-gateway/src/test/java/com/sportcourt/gateway/GatewaySecurityIntegrationTest.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/config/SecurityConfig.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/controller/AuthController.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/service/AuthService.java`
+  - `services/auth-service/src/test/java/com/sportcourt/auth/service/AuthServiceIntegrationTest.java`
+- Ghi chu:
+  - Verify pass:
+    - `services/auth-service`: `mvn "-Dmaven.repo.local=.m2repo" test`
+    - `services/api-gateway`: `mvn "-Dmaven.repo.local=.m2repo" test`
+
+### 2026-03-12 - Tiep tuc 3 buoc uu tien (E2E flow + auth admin + token security)
+- Yeu cau: Lam truoc 3 buoc dau, de tai lieu lai sau.
+- Muc dich:
+  - Co test flow booking chinh qua gateway.
+  - Hoan thien auth-service cho quan tri user/role.
+  - Tang bao mat refresh token (reuse detection + revoke all session).
+- Hanh dong:
+  - **Buoc 1 - E2E flow qua gateway**
+    - Mo rong `GatewaySecurityIntegrationTest` voi flow:
+      - login customer -> draft booking -> deposit -> confirm -> availability = false.
+    - Dung `MockWebServer` stateful de gia lap core-service responses theo trang thai booking.
+  - **Buoc 2 - Auth admin APIs**
+    - Them controller admin:
+      - `PUT /api/auth/admin/users/{userId}/roles`
+      - `PUT /api/auth/admin/users/{userId}/status`
+      - `POST /api/auth/admin/users/{userId}/revoke-tokens`
+    - Them DTO admin:
+      - `AdminUserResponse`
+      - `UpdateUserRolesRequest`
+      - `UpdateUserStatusRequest`
+      - `TokenRevokeResponse`
+    - Bo sung logic service cap nhat role/status va revoke token theo user.
+  - **Buoc 3 - Token security nang cao**
+    - Them `POST /api/auth/logout-all` cho user dang dang nhap.
+    - Them repository bulk revoke refresh token theo user.
+    - Tang cuong refresh rotation policy:
+      - Neu phat hien reuse refresh token da revoke -> revoke toan bo refresh token active cua user.
+      - Config bat/tat qua `app.security.jwt.refresh-token-reuse-revoke-all`.
+    - Bo sung test auth:
+      - logout-all revoke token.
+      - admin update role/status.
+      - refresh token reuse -> revoke all active session.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/api-gateway/src/test/java/com/sportcourt/gateway/GatewaySecurityIntegrationTest.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/controller/AuthController.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/controller/AdminUserController.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/service/AuthService.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/repository/RefreshTokenRepository.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/dto/AdminUserResponse.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/dto/UpdateUserRolesRequest.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/dto/UpdateUserStatusRequest.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/dto/TokenRevokeResponse.java`
+  - `services/auth-service/src/main/resources/application.yml`
+  - `services/auth-service/src/test/resources/application-test.yml`
+  - `services/auth-service/src/test/java/com/sportcourt/auth/service/AuthServiceIntegrationTest.java`
+- Ghi chu verify:
+  - `services/auth-service`: `mvn "-Dmaven.repo.local=.m2repo" test` => pass.
+  - `services/api-gateway`: `mvn "-Dmaven.repo.local=.m2repo" test` => pass.
+
+### 2026-03-13 - Payment-service E2E test voi Testcontainers Kafka
+- Yeu cau: Tiep tuc buoc test E2E payment-service (booking.events -> callback -> payment.events).
+- Muc dich: Co integration test gan sat production cho luong event-driven voi Kafka that.
+- Hanh dong:
+  - Bo sung dependency test cho payment-service:
+    - `org.springframework.kafka:spring-kafka-test`
+    - `org.testcontainers:junit-jupiter`
+    - `org.testcontainers:kafka`
+  - Tao test moi `PaymentKafkaE2ETest`:
+    - Dung `ConfluentKafkaContainer` va `@DynamicPropertySource` de inject bootstrap servers.
+    - Publish `BOOKING_DRAFT_CREATED` vao topic `booking.events`.
+    - Verify payment transaction duoc tao trong DB.
+    - Goi callback API `/api/payments/callback` de danh dau giao dich thanh cong.
+    - Consume topic `payment.events` va verify event `DEPOSIT_SUCCEEDED`.
+  - Sua test cho Java 17 compatibility: thay `getFirst()` -> `get(0)`.
+  - Verify:
+    - `services/payment-service`: `mvn "-Dmaven.repo.local=.m2repo" test -q` => BUILD SUCCESS.
+    - `PaymentKafkaE2ETest` duoc compile va run, nhung `skipped` trong sandbox do khong co Docker daemon (`disabledWithoutDocker=true`).
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/payment-service/pom.xml`
+  - `services/payment-service/src/test/java/com/sportcourt/payment/service/PaymentKafkaE2ETest.java`
+- Ghi chu:
+  - Can chay lai test nay tren may co Docker Desktop dang running de verify full E2E voi Kafka that.
+
+### 2026-03-13 - Re-run rieng PaymentKafkaE2ETest sau khi bat Docker Desktop
+- Yeu cau: Chay lai rieng E2E test `PaymentKafkaE2ETest` de verify full Kafka flow that.
+- Hanh dong:
+  - Chay: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PaymentKafkaE2ETest" test -q`.
+  - Chay lai voi quyen ngoai sandbox va thu set `DOCKER_HOST=npipe:////./pipe/dockerDesktopLinuxEngine` truoc khi test.
+  - Kiem tra report: `target/surefire-reports/TEST-com.sportcourt.payment.service.PaymentKafkaE2ETest.xml`.
+- Ket qua:
+  - Build success nhung test bi `skipped` vi Testcontainers khong detect duoc Docker environment trong moi truong chay agent.
+  - Message chinh: `disabledWithoutDocker is true and Docker is not available`.
+- Ghi chu:
+  - Docker CLI van truy cap duoc daemon (`docker info` tra ve version 29.1.3), van de hien tai nam o Testcontainers detection khi chay qua agent environment.
+
+### 2026-03-13 - Dieu chinh PaymentKafkaE2ETest de fail ro rang khi Docker khong san sang
+- Yeu cau: Khong skip im lang E2E test, can fail ro rang de debug.
+- Hanh dong:
+  - Cap nhat `PaymentKafkaE2ETest`: doi `@Testcontainers(disabledWithoutDocker = true)` -> `@Testcontainers`.
+  - Chay lai rieng test: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PaymentKafkaE2ETest" test -q`.
+- Ket qua:
+  - Test khong con skip.
+  - Fail ro rang voi loi: `IllegalStateException: Could not find a valid Docker environment`.
+  - Phu hop muc tieu de phat hien loi Docker/Testcontainers som thay vi bo qua test.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/payment-service/src/test/java/com/sportcourt/payment/service/PaymentKafkaE2ETest.java`
+
+### 2026-03-13 - Dieu tra va sua loi Testcontainers "Could not find a valid Docker environment"
+- Yeu cau: Dieu tra loi khi da bat `Expose daemon on tcp://localhost:2375` nhung `PaymentKafkaE2ETest` van fail.
+- Chan doan:
+  - Docker daemon thuc te van hoat dong (`docker run hello-world` pass).
+  - Docker Desktop hien tai tra `400` cho Docker API cu (vd `/v1.41/info`), trong khi Testcontainers/docker-java dang thu API cu neu khong cau hinh.
+  - Vi vay Testcontainers fail detect environment du Docker da running.
+- Hanh dong sua:
+  - Them surefire system property trong `services/payment-service/pom.xml`:
+    - `api.version=1.51` de Testcontainers/docker-java dung API tuong thich voi Docker Desktop hien tai.
+  - Sua `PaymentKafkaE2ETest`:
+    - Chinh lai thu tu tham so `KafkaTestUtils.consumerProps(...)` cho dung signature hien tai.
+- Verify:
+  - Chay thanh cong E2E test (khong skip, khong fail):
+    - `$env:DOCKER_HOST="tcp://localhost:2375"`
+    - `mvn -f services/payment-service/pom.xml "-Dmaven.repo.local=services/payment-service/.m2repo" "-Dtest=PaymentKafkaE2ETest" test -q`
+  - Report: `tests=1, failures=0, errors=0, skipped=0`.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/payment-service/pom.xml`
+  - `services/payment-service/src/test/java/com/sportcourt/payment/service/PaymentKafkaE2ETest.java`
+
+### 2026-03-13 - Dieu tra loi auth-service khong ket noi DB (Communications link failure)
+- Yeu cau: Kiem tra auth-service, chay lai va fix loi ket noi DB.
+- Ket qua dieu tra:
+  - Da tai hien loi khi chay `auth-service` local: Flyway/Hikari fail ket noi `jdbc:mysql://localhost:3308/auth_db`.
+  - `Test-NetConnection localhost:3308` => `TcpTestSucceeded=False` (port DB auth dang dong).
+  - Docker daemon tren may dang down: service `com.docker.service` status `Stopped`.
+- Hanh dong fix da lam trong repo:
+  - Cap nhat `infra/docker/docker-compose.yml`:
+    - Loai bo `MYSQL_USER=root` va `MYSQL_PASSWORD` khoi cac service MySQL (tranh conflict setup root).
+    - Them healthcheck cho `mysql-core`, `mysql-payment`, `mysql-auth`.
+    - Chuyen `depends_on` cua `core-service`, `payment-service`, `auth-service` sang `condition: service_healthy` cho DB.
+- Trang thai verify:
+  - Da verify compose parse OK (`docker compose config`).
+  - Chua the verify auth-service up thanh cong trong session nay vi Docker Desktop Service dang tat va agent khong du quyen bat service tren may.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `infra/docker/docker-compose.yml`
+
+### 2026-03-14 - Thuc hien buoc 1: on dinh local environment + verify auth-service
+- Yeu cau: "Thuc hien buoc 1 truoc" (on dinh moi truong local).
+- Muc dich:
+  - Co 1 lenh khoi tao/check environment.
+  - Loai bo loi ket noi DB cho auth-service do port xung dot.
+- Hanh dong:
+  - Cap nhat datasource URL dung port env variable:
+    - `core-service`: `CORE_DB_PORT` (default 3306)
+    - `payment-service`: `PAYMENT_DB_PORT` (default 3307)
+    - `auth-service`: `AUTH_DB_PORT` (default 3308)
+  - Cap nhat `infra/docker/docker-compose.yml`:
+    - Mapping port DB theo env: `MYSQL_CORE_PORT`, `MYSQL_PAYMENT_PORT`, `MYSQL_AUTH_PORT`.
+    - Them MySQL healthcheck.
+    - `depends_on` cua `core-service`, `payment-service`, `auth-service` doi sang `condition: service_healthy`.
+  - Tao script 1 lenh setup/check moi truong:
+    - `scripts/dev-step1-up.ps1`
+    - Start infra (`mysql-core`, `mysql-payment`, `mysql-auth`, `kafka`), wait health, check actuator cua core/payment/auth.
+    - Ho tro custom port khi bi xung dot (`-CoreDbPort`, `-PaymentDbPort`, `-AuthDbPort`).
+  - Them tai lieu huong dan:
+    - `docs/dev-step1-environment.md`.
+- Verify:
+  - Chay script voi port khong xung dot:
+    - `powershell -ExecutionPolicy Bypass -File scripts/dev-step1-up.ps1 -CoreDbPort 13306 -PaymentDbPort 13307 -AuthDbPort 13308` => pass.
+  - Chay `auth-service` voi `AUTH_DB_PORT=13308` va check health `UP` tai `http://localhost:18082/actuator/health` => pass.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `infra/docker/docker-compose.yml`
+  - `services/core-service/src/main/resources/application.yml`
+  - `services/payment-service/src/main/resources/application.yml`
+  - `services/auth-service/src/main/resources/application.yml`
+  - `scripts/dev-step1-up.ps1`
+  - `docs/dev-step1-environment.md`
+
+### 2026-03-14 - Dieu tra va sua loi Flyway cua payment-service khi chay local
+- Yeu cau: "check lai payment-service, chay len bi loi flyway".
+- Chan doan:
+  - Tai hien loi khi chay `payment-service` local voi cau hinh mac dinh.
+  - Stacktrace: `FlywaySqlException -> Unable to obtain connection from database -> Communications link failure`.
+  - Nguyen nhan goc: service dang ket noi `localhost:3307` trong khi MySQL payment container dang map host port `13307`.
+- Hanh dong:
+  - Cap nhat `services/payment-service/src/main/resources/application.yml`:
+    - `spring.datasource.url` doi sang fallback 2 bien moi truong:
+    - `${PAYMENT_DB_PORT:${MYSQL_PAYMENT_PORT:3307}}`
+  - Muc dich:
+    - Neu chay local thuong: dung `PAYMENT_DB_PORT`.
+    - Neu da dung bien compose `MYSQL_PAYMENT_PORT` (vd 13307): service van tu nhan dung port.
+- Verify:
+  - Khong set port env => van fail voi `Communications link failure` (tai hien dung van de).
+  - Set `MYSQL_PAYMENT_PORT=13307` (khong can `PAYMENT_DB_PORT`) => `payment-service` start thanh cong, Flyway migrate OK.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `services/payment-service/src/main/resources/application.yml`
+
+### 2026-03-14 - Re-check loi `entityManagerFactory` khi run payment-service
+- Yeu cau: user bao van loi `Error creating bean with name 'entityManagerFactory'`.
+- Chan doan lai:
+  - Da tai hien truc tiep bang `spring-boot:run`.
+  - Root cause van la ket noi DB that bai o buoc Flyway:
+    - `FlywaySqlException: Unable to obtain connection from database`
+    - `Communications link failure` / `Connection refused`
+  - Nghia la process dang dung port DB khong dung (thuong la 3307 thay vi 13307).
+- Ket luan:
+  - Khong phai loi entity mapping/JPA model.
+  - La loi datasource endpoint/port khi chay local.
+- File anh huong:
+  - `WORK_LOG.md`
+
+### 2026-03-14 - Chinh cau hinh run IDE de payment-service doc dung DB port
+- Yeu cau: "chinh luon cau hinh run trong IDE".
+- Hanh dong:
+  - Tao file root `.env` de phuc vu cac launch config trong `.vscode/launch.json` (cac config dang dung `envFile=${workspaceFolder}/.env`).
+  - Set cac bien:
+    - `CORE_DB_PORT=13306`
+    - `PAYMENT_DB_PORT=13307`
+    - `AUTH_DB_PORT=13308`
+- Muc dich:
+  - Khi bam Run/Debug trong IDE, service tu dong nhan dung DB port theo container dang chay, khong can set tay env moi lan.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `.env`
+
+### 2026-03-14 - Sua script E2E core-payment loi 400 o buoc tao booking draft
+- Yeu cau: user chay `scripts/e2e-core-payment.ps1` bi `400 Bad Request` tai buoc `Creating booking draft`.
+- Chan doan:
+  - Script tao `startTime/endTime` dua tren gio hien tai +2h nen thuong khong dung moc 30 phut.
+  - `core-service` co rule bat buoc slot 30 phut (`minute % 30 == 0`), nen API draft tra 400.
+- Hanh dong:
+  - Sua script de lam tron thoi gian len moc 30 phut tiep theo roi moi +2h.
+  - Them log body khi API tra loi de de debug chinh xac nguyen nhan thay vi chi thay stacktrace PowerShell.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `scripts/e2e-core-payment.ps1`
+
+### 2026-03-14 - Trien khai buoc 2: E2E qua gateway + auth
+- Yeu cau: "tien hanh thuc hien buoc 2 (E2E qua gateway + auth)".
+- Hanh dong:
+  - Them script moi `scripts/e2e-gateway-auth.ps1` de test flow thuc:
+    - register/login/me qua `api-gateway -> auth-service`
+    - verify RBAC gateway (`401` anonymous bookings, `200` customer bookings, `403` customer tao venue)
+    - promote role qua admin API, login lai va verify OWNER tao venue/court qua gateway
+    - refresh token rotate, logout, va reject refresh token da revoke (`401`)
+  - Them tai lieu chay script:
+    - `docs/gateway-auth-cross-service-e2e.md`
+  - Sua compose cho `api-gateway` container de route dung downstream khi chay bang Docker network:
+    - `APP_DOWNSTREAM_AUTH_SERVICE_URL=http://auth-service:8082`
+    - `APP_DOWNSTREAM_CORE_SERVICE_URL=http://core-service:8081`
+    - file: `infra/docker/docker-compose.yml`
+- Verify:
+  - Da chay thanh cong script:
+    - `powershell -ExecutionPolicy Bypass -File scripts/e2e-gateway-auth.ps1`
+  - Ket qua: `E2E gateway + auth SUCCESS`.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `scripts/e2e-gateway-auth.ps1`
+  - `docs/gateway-auth-cross-service-e2e.md`
+  - `infra/docker/docker-compose.yml`
+
+### 2026-03-15 - Chuan hoa API error contract da service
+- Yeu cau: thuc hien buoc tiep theo theo best practice: chuan hoa error contract + handler + test.
+- Hanh dong:
+  - Chuan hoa contract loi bo sung cac field:
+    - `code`, `message`, `details`, `traceId`, `timestamp`, `status`, `path`, `error`.
+  - `core-service`:
+    - cap nhat `ApiError`, thay `ApiFieldViolation` bang `ApiErrorDetail`.
+    - cap nhat `GlobalExceptionHandler` (validation/malformed/business/unhandled).
+    - them `TraceIdFilter`.
+    - them `ApiSecurityErrorHandler` cho 401/403 theo contract.
+    - update `SecurityConfig` de dung security error handler.
+  - `auth-service`:
+    - them `ApiError`, `ApiErrorDetail`.
+    - them `GlobalExceptionHandler`.
+    - them `TraceIdFilter`.
+    - them `ApiSecurityErrorHandler` va gan vao `SecurityConfig`.
+  - `payment-service`:
+    - them `ApiError`, `ApiErrorDetail`.
+    - them `GlobalExceptionHandler`.
+    - them `TraceIdFilter`.
+  - `api-gateway`:
+    - them `ApiError`, `ApiErrorDetail`.
+    - them `TraceIdGlobalFilter` de propagate `X-Trace-Id`.
+    - them `ApiSecurityErrorHandler` cho 401/403.
+    - them `GatewayErrorAttributes` de format loi unhandled theo contract.
+    - update `SecurityConfig` de dung security error handler.
+  - Test:
+    - them unit test handler:
+      - `core-service`: `GlobalExceptionHandlerTest`
+      - `auth-service`: `GlobalExceptionHandlerTest`
+      - `payment-service`: `GlobalExceptionHandlerTest`
+    - update `GatewaySecurityIntegrationTest` assert them body loi chuan cho 401/403.
+  - Tai lieu:
+    - them `docs/api-error-contract.md`.
+- Verify:
+  - Da chay test moi:
+    - core/auth/payment: `-Dtest=GlobalExceptionHandlerTest` => pass.
+    - gateway: `-Dtest=GatewaySecurityIntegrationTest` => pass.
+  - Da chay `test-compile` cho 4 service chinh => pass.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `docs/api-error-contract.md`
+  - `services/core-service/src/main/java/com/sportcourt/core/api/ApiError.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/api/ApiErrorDetail.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/exception/GlobalExceptionHandler.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/TraceIdFilter.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/ApiSecurityErrorHandler.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/SecurityConfig.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/exception/GlobalExceptionHandlerTest.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/api/ApiError.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/api/ApiErrorDetail.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/exception/GlobalExceptionHandler.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/config/TraceIdFilter.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/config/ApiSecurityErrorHandler.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/config/SecurityConfig.java`
+  - `services/auth-service/src/test/java/com/sportcourt/auth/exception/GlobalExceptionHandlerTest.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/api/ApiError.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/api/ApiErrorDetail.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/exception/GlobalExceptionHandler.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/config/TraceIdFilter.java`
+  - `services/payment-service/src/test/java/com/sportcourt/payment/exception/GlobalExceptionHandlerTest.java`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/api/ApiError.java`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/api/ApiErrorDetail.java`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/TraceIdGlobalFilter.java`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/ApiSecurityErrorHandler.java`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/GatewayErrorAttributes.java`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/SecurityConfig.java`
+  - `services/api-gateway/src/test/java/com/sportcourt/gateway/GatewaySecurityIntegrationTest.java`
+
+### 2026-03-15 - Hoan tat Step 1: scaffold cac service con thieu
+- Yeu cau: "thuc hien lan luot theo thu tu", bat dau tu Step 1.
+- Hanh dong:
+  - Tao skeleton day du cho 3 service con thieu:
+    - `notification-service` (send/get notification API, error contract, trace-id filter, Dockerfile, test smoke).
+    - `reporting-service` (daily booking report API stub, error contract, trace-id filter, Dockerfile, test smoke).
+    - `chatbot-service` (chat API stub theo intent co ban, error contract, trace-id filter, Dockerfile, test smoke).
+  - Cap nhat `api-gateway`:
+    - Them route cho `/api/notifications/**`, `/api/reports/**`, `/api/chatbot/**`.
+    - Them rule role trong `SecurityConfig` cho cac route moi.
+  - Cap nhat `infra/docker/docker-compose.yml`:
+    - Them 3 service moi + env downstream URL cho gateway.
+  - Cap nhat `scripts/dev-step1-up.ps1` va `.vscode/launch.json` de run local nhanh.
+  - Them tai lieu huong dan: `docs/backend-step1-service-skeleton.md`.
+- Verify:
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` (notification/reporting/chatbot) => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q -DskipTests` (api-gateway) => pass.
+
+### 2026-03-15 - Step 2: Chuan hoa payment provider abstraction (mock-first)
+- Yeu cau: thuc hien tiep theo theo thu tu, den buoc payment provider integration.
+- Hanh dong:
+  - Them enum provider:
+    - `services/payment-service/src/main/java/com/sportcourt/payment/domain/enums/PaymentProvider.java`
+  - Mo rong `PaymentTransaction` va response:
+    - bo sung `provider` va `checkoutUrl`.
+  - Tao abstraction provider:
+    - `PaymentProviderClient`
+    - `ProviderPaymentSession`
+    - `MockPaymentProviderClient`
+    - `PaymentProviderClientResolver`
+  - Cap nhat `PaymentService`:
+    - doc cau hinh `payment.provider.type`.
+    - tao payment session qua provider client.
+    - luu `providerReference` + `checkoutUrl` khi khoi tao giao dich.
+  - Them migration:
+    - `V2__add_provider_and_checkout_url.sql`
+  - Cap nhat cau hinh:
+    - `payment.provider.type`
+    - `payment.provider.mock.checkout-base-url`
+  - Cap nhat test + docs:
+    - `PaymentServiceIntegrationTest` assert `provider=MOCK` + co `checkoutUrl`.
+    - cap nhat `docs/payment-service-step5.md`.
+- Verify:
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` (payment-service) => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PaymentServiceIntegrationTest" test -q` => pass.
+
+### 2026-03-15 - Step 3 (phan security + gateway): dua payment-service vao security contract thong nhat
+- Yeu cau: tiep tuc lam lan luot theo thu tu.
+- Hanh dong:
+  - Payment service:
+    - Them `spring-boot-starter-security` + `spring-boot-starter-oauth2-resource-server`.
+    - Them `SecurityConfig` de bat JWT cho API nghiep vu:
+      - `POST /api/payments/deposits/initiate`: `CUSTOMER|OWNER|ADMIN`.
+      - `GET /api/payments/**`: `CUSTOMER|OWNER|ADMIN|STAFF|SUPPORT`.
+      - `POST /api/payments/callback`: permitAll (duoc bao ve boi shared secret).
+    - Them `ApiSecurityErrorHandler` de tra 401/403 theo error contract chung.
+    - Them callback shared secret (`payment.callback.shared-secret`) va check trong controller/service qua header `X-Payment-Callback-Secret`.
+    - Bo sung config JWT secret:
+      - `app.security.jwt.secret`.
+  - API Gateway:
+    - Them route `/api/payments/**` -> `payment-service`.
+    - Them RBAC route payment (callback permitAll, initiate/get co role phu hop).
+  - Infra:
+    - Compose gateway bo sung env `APP_DOWNSTREAM_PAYMENT_SERVICE_URL`.
+    - Compose gateway `depends_on` them `payment-service`.
+  - Test/docs:
+    - `PaymentServiceIntegrationTest` bo sung case callback secret sai/ dung.
+    - Cap nhat `docs/payment-service-step5.md`.
+- Verify:
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` (payment-service) => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` (api-gateway) => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PaymentServiceIntegrationTest" test -q` => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=GatewaySecurityIntegrationTest" test -q` => pass.
+  - `docker compose -f infra/docker/docker-compose.yml config` => pass.
+
+### 2026-03-15 - Step 4 (reliability): them outbox cho payment.events
+- Yeu cau: tiep tuc theo thu tu, nang do tin cay phat event tu payment-service.
+- Hanh dong:
+  - Tao outbox model cho payment-service:
+    - `OutboxEventStatus`
+    - `OutboxEvent`
+    - `OutboxEventRepository`
+  - Tao `PaymentOutboxService`:
+    - Khi callback thanh toan `SUCCESS/FAILED`, enqueue event vao `outbox_event` trong cung transaction.
+  - Tao `OutboxPublisherScheduler`:
+    - Quet outbox `PENDING`, publish Kafka qua `PaymentEventPublisher.publishRaw`.
+    - Co retry + exponential backoff, qua nguong thi `FAILED`.
+    - Co toggle `outbox.publisher.enabled`.
+  - Refactor:
+    - `PaymentService` doi tu publish truc tiep sang enqueue outbox.
+    - `PaymentEventPublisher` chuyen thanh raw publisher.
+  - Migration:
+    - `V3__outbox_event.sql`.
+  - Config:
+    - bo sung nhom `outbox.publisher.*` trong `application.yml`.
+    - tat scheduler trong test profile (`outbox.publisher.enabled=false`).
+  - Boot:
+    - bat scheduling trong `PaymentServiceApplication` bang `@EnableScheduling`.
+  - Docs:
+    - cap nhat `docs/payment-service-step5.md`.
+- Verify:
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` (payment-service) => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PaymentServiceIntegrationTest" test -q` => pass.
+
+### 2026-03-15 - Step 5 (booking lifecycle): auto chuyen trang thai theo thoi gian su dung
+- Yeu cau: tiep tuc theo thu tu phan nghiep vu booking lifecycle.
+- Hanh dong:
+  - Core-service:
+    - Them scheduler moi `BookingLifecycleScheduler`:
+      - `CONFIRMED` -> `IN_PROGRESS` khi da den gio bat dau va da dat coc (`DEPOSITED|PAID`).
+      - `IN_PROGRESS` -> `COMPLETED` khi qua gio ket thuc.
+    - Phat event outbox bo sung:
+      - `BOOKING_IN_PROGRESS`
+      - `BOOKING_COMPLETED`
+    - Cap nhat `BookingEventType` them 2 loai event moi.
+    - Cap nhat repository bo sung query method:
+      - `findByStatusAndStartTimeLessThanEqual`
+      - `findByStatusAndEndTimeLessThanEqual`
+    - Them cau hinh:
+      - `booking.lifecycle.scheduler.fixed-delay-ms` (mac dinh 60000ms).
+  - Test:
+    - Them `BookingLifecycleSchedulerTest` (unit test voi mock repository/outbox):
+      - confirm -> in_progress
+      - skip unpaid
+      - in_progress -> completed
+- Verify:
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` (core-service) => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=BookingLifecycleSchedulerTest" test -q` => pass.
+
+### 2026-03-15 - Step 6 (CI gate): thiet lap pipeline build/test backend toi thieu
+- Yeu cau: tiep tuc theo thu tu, bo sung governance/CI cho backend.
+- Hanh dong:
+  - Them workflow GitHub Actions:
+    - `.github/workflows/backend-ci.yml`
+    - Job `compile` matrix cho:
+      - core/auth/payment/gateway/notification/reporting/chatbot
+    - Job `fast-tests` matrix cho bo test cot loi:
+      - `BookingServiceIntegrationTest`
+      - `BookingLifecycleSchedulerTest`
+      - `AuthServiceIntegrationTest`
+      - `PaymentServiceIntegrationTest`
+      - `GatewaySecurityIntegrationTest`
+  - Them tai lieu:
+    - `docs/backend-step6-ci-observability.md`
+- Muc dich:
+  - Tao quality gate merge request o muc toi thieu (build + fast test).
+  - Tranh vo tinh gay regression giua cac service.
+
+### 2026-03-15 - Dong bo E2E script theo security moi cua payment-service
+- Yeu cau: sau khi them security cho payment-service, can dam bao script E2E local van chay.
+- Hanh dong:
+  - Cap nhat `scripts/e2e-core-payment.ps1`:
+    - Them param `PaymentCallbackSecret`.
+    - Goi `GET /api/payments/booking/{bookingId}` bang JWT header thay vi anonymous.
+    - Goi callback kem header `X-Payment-Callback-Secret`.
+  - Cap nhat huong dan:
+    - `docs/core-payment-cross-service-e2e.md`.

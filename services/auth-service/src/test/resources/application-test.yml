@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:auth_service_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: false
+
+app:
+  security:
+    jwt:
+      issuer: test-auth
+      access-token-ttl-seconds: 3600
+      refresh-token-ttl-seconds: 86400
+      refresh-token-reuse-revoke-all: true
+      secret: test-secret-key-for-jwt-signing-at-least-32-bytes

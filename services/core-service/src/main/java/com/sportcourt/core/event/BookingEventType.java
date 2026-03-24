@@ -1,0 +1,12 @@
+package com.sportcourt.core.event;
+
+public enum BookingEventType {
+    BOOKING_DRAFT_CREATED,
+    BOOKING_DEPOSITED,
+    BOOKING_PAYMENT_FAILED,
+    BOOKING_CONFIRMED,
+    BOOKING_IN_PROGRESS,
+    BOOKING_COMPLETED,
+    BOOKING_CANCELED,
+    BOOKING_TIMEOUT
+}

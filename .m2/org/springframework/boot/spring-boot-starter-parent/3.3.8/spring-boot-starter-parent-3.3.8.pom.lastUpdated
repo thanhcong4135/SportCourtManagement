@@ -1,0 +1,4 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Mon Feb 16 17:16:31 ICT 2026
+@default-central-https\://repo.maven.apache.org/maven2/.lastUpdated=1771236991358
+https\://repo.maven.apache.org/maven2/.error=Could not transfer artifact org.springframework.boot\:spring-boot-starter-parent\:pom\:3.3.8 from/to central (https\://repo.maven.apache.org/maven2)\: d\:\\Udacity\\SportCourtManagement\\.m2\\org\\springframework\\boot\\spring-boot-starter-parent\\3.3.8\\spring-boot-starter-parent-3.3.8.pom.8587130441403504606.tmp.16033542687492768614.tmp -> d\:\\Udacity\\SportCourtManagement\\.m2\\org\\springframework\\boot\\spring-boot-starter-parent\\3.3.8\\spring-boot-starter-parent-3.3.8.pom.8587130441403504606.tmp

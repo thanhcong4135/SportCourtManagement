@@ -1,0 +1,94 @@
+spring:
+  application:
+    name: core-service
+  datasource:
+    url: jdbc:mysql://localhost:${CORE_DB_PORT:3306}/core_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: 123456
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${kafka.bootstrap-servers}
+    producer:
+      acks: all
+      retries: 10
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: core-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        isolation.level: read_committed
+
+server:
+  port: 8081
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+booking:
+  deposit:
+    deadline-minutes: 30
+  lifecycle:
+    scheduler:
+      fixed-delay-ms: 60000
+  payment:
+    auto-confirm-on-deposit-success: true
+
+outbox:
+  publisher:
+    fixed-delay-ms: 5000
+    batch-size: 100
+    max-retries: 10
+    initial-retry-delay-seconds: 5
+    max-retry-delay-seconds: 300
+  monitoring:
+    failed-threshold: 10
+
+kafka:
+  bootstrap-servers: localhost:9092
+  consumer:
+    retry:
+      max-attempts: 3
+      backoff-ms: 1000
+    dlq:
+      suffix: .dlq
+    audit:
+      enabled: false
+      group-id: core-service-audit
+    payment:
+      enabled: true
+      group-id: core-service-payment
+  topics:
+    booking-events: booking.events
+    payment-events: payment.events
+
+app:
+  security:
+    # Dev default only. Replace via env APP_SECURITY_JWT_SECRET in real environments.
+    jwt:
+      secret: change-this-dev-secret-to-a-long-random-value-32b

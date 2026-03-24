@@ -1,0 +1,2 @@
+-- MySQL uses VARCHAR for status, no enum alter required.
+-- Reserved for forward-compatible migration history.
