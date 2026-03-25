@@ -18,6 +18,7 @@ import java.util.UUID;
 public class PaymentOutboxService {
 
     private static final String AGGREGATE_TYPE = "PAYMENT";
+    private static final String SCHEMA_VERSION = "1.0";
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
@@ -65,6 +66,7 @@ public class PaymentOutboxService {
 
     private String toPayload(UUID eventId, PaymentEventType eventType, PaymentTransaction payment) {
         PaymentEvent event = new PaymentEvent();
+        event.setSchemaVersion(SCHEMA_VERSION);
         event.setEventId(eventId);
         event.setType(eventType);
         event.setPaymentId(payment.getId());

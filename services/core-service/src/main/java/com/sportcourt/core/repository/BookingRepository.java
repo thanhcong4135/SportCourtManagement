@@ -51,4 +51,6 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     List<Booking> findByStatusAndStartTimeLessThanEqual(BookingStatus status, OffsetDateTime time);
 
     List<Booking> findByStatusAndEndTimeLessThanEqual(BookingStatus status, OffsetDateTime time);
+
+    Optional<Booking> findByCustomerIdAndIdempotencyKey(UUID customerId, String idempotencyKey);
 }

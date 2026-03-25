@@ -21,11 +21,16 @@ spring:
 app:
   security:
     jwt:
-      secret: test-secret-32bytes-minimum-value-12345
+      issuer-uri: https://test-auth.local
+      jwk-set-uri: http://localhost:18082/.well-known/jwks.json
 
 payment:
   callback:
     shared-secret: test-callback-secret
+    signature:
+      enabled: false
+      secret: test-signature-secret
+      max-skew-seconds: 300
 
 outbox:
   publisher:

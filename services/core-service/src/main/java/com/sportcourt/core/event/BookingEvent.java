@@ -12,6 +12,7 @@ import java.util.UUID;
 @Getter
 @Setter
 public class BookingEvent {
+    private String schemaVersion;
     private UUID eventId;
     private BookingEventType type;
     private UUID bookingId;

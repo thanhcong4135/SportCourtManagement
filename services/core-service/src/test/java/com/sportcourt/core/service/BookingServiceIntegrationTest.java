@@ -27,6 +27,7 @@ import com.sportcourt.core.event.BookingEventPublisher;
 import com.sportcourt.core.event.PaymentEvent;
 import com.sportcourt.core.event.PaymentEventType;
 import com.sportcourt.core.repository.BookingRepository;
+import com.sportcourt.core.repository.BookingActionIdempotencyRepository;
 import com.sportcourt.core.repository.CourtRepository;
 import com.sportcourt.core.repository.OutboxEventRepository;
 import com.sportcourt.core.repository.VenueRepository;
@@ -77,6 +78,9 @@ class BookingServiceIntegrationTest {
     private BookingRepository bookingRepository;
 
     @Autowired
+    private BookingActionIdempotencyRepository bookingActionIdempotencyRepository;
+
+    @Autowired
     private OutboxEventRepository outboxEventRepository;
 
     @Autowired
@@ -91,6 +95,7 @@ class BookingServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         outboxEventRepository.deleteAll();
+        bookingActionIdempotencyRepository.deleteAll();
         bookingRepository.deleteAll();
         courtRepository.deleteAll();
         venueRepository.deleteAll();
@@ -333,6 +338,127 @@ class BookingServiceIntegrationTest {
         assertThat(event.getPayload()).isNotBlank();
         JsonNode payload = objectMapper.readTree(event.getPayload());
         assertThat(payload.path("eventId").asText()).isNotBlank();
+    }
+
+    @Test
+    void createDraft_withSameIdempotencyKey_shouldReturnExistingBooking() {
+        Court court = createCourt("Court-Idempotency");
+        UUID customerId = UUID.randomUUID();
+        BookingDraftRequest request = new BookingDraftRequest(
+            court.getId(),
+            customerId,
+            time(2026, 3, 24, 8, 0),
+            time(2026, 3, 24, 10, 0),
+            money("250000")
+        );
+
+        BookingResponse first = bookingService.createDraft(request, "draft-key-001");
+        BookingResponse replay = bookingService.createDraft(request, "draft-key-001");
+
+        assertThat(replay.id()).isEqualTo(first.id());
+        assertThat(bookingRepository.count()).isEqualTo(1);
+        assertThat(outboxEventRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void createDraft_withSameIdempotencyKeyAndDifferentPayload_shouldReject() {
+        Court court = createCourt("Court-Idempotency-Mismatch");
+        UUID customerId = UUID.randomUUID();
+
+        bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            customerId,
+            time(2026, 3, 24, 12, 0),
+            time(2026, 3, 24, 14, 0),
+            money("250000")
+        ), "draft-key-002");
+
+        assertThatThrownBy(() -> bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            customerId,
+            time(2026, 3, 24, 14, 0),
+            time(2026, 3, 24, 16, 0),
+            money("250000")
+        ), "draft-key-002"))
+            .isInstanceOf(ResponseStatusException.class)
+            .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+            .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void payDeposit_withSameIdempotencyKey_shouldReturnExistingResult() {
+        Court court = createCourt("Court-Deposit-Idempotency");
+        BookingResponse draft = bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            UUID.randomUUID(),
+            time(2026, 3, 24, 18, 0),
+            time(2026, 3, 24, 20, 0),
+            money("300000")
+        ));
+
+        BookingResponse first = bookingService.payDeposit(
+            draft.id(),
+            new DepositPaymentRequest(money("150000")),
+            "deposit-key-001"
+        );
+        BookingResponse replay = bookingService.payDeposit(
+            draft.id(),
+            new DepositPaymentRequest(money("150000")),
+            "deposit-key-001"
+        );
+
+        assertThat(first.paymentStatus()).isEqualTo(PaymentStatus.DEPOSITED);
+        assertThat(replay.id()).isEqualTo(first.id());
+        assertThat(replay.depositPaid()).isEqualByComparingTo(money("150000"));
+        assertThat(outboxEventRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void payDeposit_withSameIdempotencyKeyAndDifferentPayload_shouldReject() {
+        Court court = createCourt("Court-Deposit-Idempotency-Conflict");
+        BookingResponse draft = bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            UUID.randomUUID(),
+            time(2026, 3, 24, 20, 0),
+            time(2026, 3, 24, 22, 0),
+            money("300000")
+        ));
+
+        bookingService.payDeposit(
+            draft.id(),
+            new DepositPaymentRequest(money("150000")),
+            "deposit-key-002"
+        );
+
+        assertThatThrownBy(() -> bookingService.payDeposit(
+            draft.id(),
+            new DepositPaymentRequest(money("200000")),
+            "deposit-key-002"
+        ))
+            .isInstanceOf(ResponseStatusException.class)
+            .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+            .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void confirm_withSameIdempotencyKey_shouldReturnExistingResult() {
+        Court court = createCourt("Court-Confirm-Idempotency");
+        BookingResponse draft = bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            UUID.randomUUID(),
+            time(2026, 3, 25, 8, 0),
+            time(2026, 3, 25, 10, 0),
+            money("400000")
+        ));
+        bookingService.payDeposit(draft.id(), new DepositPaymentRequest(money("200000")));
+
+        BookingResponse first = bookingService.confirm(draft.id(), "confirm-key-001");
+        BookingResponse replay = bookingService.confirm(draft.id(), "confirm-key-001");
+
+        assertThat(first.status()).isEqualTo(BookingStatus.CONFIRMED);
+        assertThat(replay.id()).isEqualTo(first.id());
+        assertThat(replay.status()).isEqualTo(BookingStatus.CONFIRMED);
+        assertThat(outboxEventRepository.count()).isEqualTo(3);
     }
 
     @Test

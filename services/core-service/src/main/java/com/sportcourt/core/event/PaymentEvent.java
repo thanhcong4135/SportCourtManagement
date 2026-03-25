@@ -11,6 +11,7 @@ import java.util.UUID;
 @Setter
 public class PaymentEvent {
 
+    private String schemaVersion;
     private UUID eventId;
     private PaymentEventType type;
     private UUID paymentId;

@@ -37,9 +37,12 @@ public class PaymentController {
     @PostMapping("/callback")
     public PaymentTransactionResponse paymentCallback(
         @RequestHeader(name = "X-Payment-Callback-Secret", required = false) String callbackSecret,
+        @RequestHeader(name = "X-Payment-Signature", required = false) String callbackSignature,
+        @RequestHeader(name = "X-Payment-Timestamp", required = false) String callbackTimestamp,
         @Valid @RequestBody PaymentCallbackRequest request
     ) {
         paymentService.validateCallbackSecret(callbackSecret);
+        paymentService.validateCallbackSignature(request, callbackSignature, callbackTimestamp);
         return paymentService.applyCallback(request);
     }
 

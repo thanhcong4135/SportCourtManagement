@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
@@ -22,4 +23,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     List<OutboxEvent> findBatchForPublish(@Param("status") OutboxEventStatus status,
                                           @Param("now") OffsetDateTime now,
                                           Pageable pageable);
+
+    long countByStatus(OutboxEventStatus status);
+
+    Optional<OutboxEvent> findFirstByStatusOrderByCreatedAtAsc(OutboxEventStatus status);
 }

@@ -19,11 +19,15 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 @Service
 public class PaymentService {
@@ -34,19 +38,28 @@ public class PaymentService {
     private final BigDecimal depositRatio;
     private final PaymentProvider defaultProvider;
     private final String callbackSharedSecret;
+    private final boolean callbackSignatureEnabled;
+    private final String callbackSignatureSecret;
+    private final long callbackSignatureMaxSkewSeconds;
 
     public PaymentService(PaymentTransactionRepository paymentTransactionRepository,
                           PaymentOutboxService paymentOutboxService,
                           PaymentProviderClientResolver paymentProviderClientResolver,
                           @Value("${payment.deposit.ratio:0.5}") BigDecimal depositRatio,
                           @Value("${payment.provider.type:MOCK}") String providerType,
-                          @Value("${payment.callback.shared-secret:}") String callbackSharedSecret) {
+                          @Value("${payment.callback.shared-secret:}") String callbackSharedSecret,
+                          @Value("${payment.callback.signature.enabled:false}") boolean callbackSignatureEnabled,
+                          @Value("${payment.callback.signature.secret:}") String callbackSignatureSecret,
+                          @Value("${payment.callback.signature.max-skew-seconds:300}") long callbackSignatureMaxSkewSeconds) {
         this.paymentTransactionRepository = paymentTransactionRepository;
         this.paymentOutboxService = paymentOutboxService;
         this.paymentProviderClientResolver = paymentProviderClientResolver;
         this.depositRatio = depositRatio;
         this.defaultProvider = PaymentProvider.fromConfig(providerType);
         this.callbackSharedSecret = callbackSharedSecret == null ? "" : callbackSharedSecret.trim();
+        this.callbackSignatureEnabled = callbackSignatureEnabled;
+        this.callbackSignatureSecret = callbackSignatureSecret == null ? "" : callbackSignatureSecret.trim();
+        this.callbackSignatureMaxSkewSeconds = callbackSignatureMaxSkewSeconds;
     }
 
     public void validateCallbackSecret(String providedSecret) {
@@ -55,6 +68,35 @@ public class PaymentService {
         }
         if (providedSecret == null || !callbackSharedSecret.equals(providedSecret)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid payment callback secret");
+        }
+    }
+
+    public void validateCallbackSignature(PaymentCallbackRequest request, String signature, String timestamp) {
+        if (!callbackSignatureEnabled) {
+            return;
+        }
+        if (callbackSignatureSecret.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Payment callback signature secret is not configured");
+        }
+        if (signature == null || signature.isBlank() || timestamp == null || timestamp.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing callback signature headers");
+        }
+
+        long epochSeconds;
+        try {
+            epochSeconds = Long.parseLong(timestamp);
+        } catch (NumberFormatException ex) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid callback timestamp");
+        }
+
+        long now = OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond();
+        if (Math.abs(now - epochSeconds) > callbackSignatureMaxSkewSeconds) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Callback timestamp is expired");
+        }
+
+        String expected = signPayload(buildSignaturePayload(request, timestamp));
+        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.trim().toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid callback signature");
         }
     }
 
@@ -164,6 +206,31 @@ public class PaymentService {
             return null;
         }
         return reason.length() <= 512 ? reason : reason.substring(0, 512);
+    }
+
+    private String buildSignaturePayload(PaymentCallbackRequest request, String timestamp) {
+        String failureReason = request.failureReason() == null ? "" : request.failureReason();
+        return request.paymentId() + "|" + request.providerReference() + "|" + request.success() + "|" + failureReason + "|" + timestamp;
+    }
+
+    private String signPayload(String payload) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec key = new SecretKeySpec(callbackSignatureSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(key);
+            byte[] digest = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            return toLowerHex(digest);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to generate callback signature", ex);
+        }
+    }
+
+    private String toLowerHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            builder.append(String.format(Locale.ROOT, "%02x", b));
+        }
+        return builder.toString();
     }
 
     private PaymentTransactionResponse toResponse(PaymentTransaction payment) {

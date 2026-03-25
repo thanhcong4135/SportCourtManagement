@@ -18,6 +18,7 @@ import java.util.UUID;
 public class BookingEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(BookingEventConsumer.class);
+    private static final String SUPPORTED_SCHEMA_VERSION = "1.0";
 
     private final ObjectMapper objectMapper;
     private final PaymentService paymentService;
@@ -37,6 +38,7 @@ public class BookingEventConsumer {
                                     @Header(name = "event-id", required = false) String headerEventId) {
         try {
             JsonNode event = objectMapper.readTree(payload);
+            validateSchemaVersion(event.path("schemaVersion").asText(null));
             String type = event.path("type").asText();
             if (!"BOOKING_DRAFT_CREATED".equals(type)) {
                 return;
@@ -66,5 +68,14 @@ public class BookingEventConsumer {
             return valueFromHeader;
         }
         return null;
+    }
+
+    private void validateSchemaVersion(String schemaVersion) {
+        if (schemaVersion == null || schemaVersion.isBlank()) {
+            return;
+        }
+        if (!SUPPORTED_SCHEMA_VERSION.equals(schemaVersion)) {
+            throw new IllegalArgumentException("Unsupported booking event schemaVersion: " + schemaVersion);
+        }
     }
 }

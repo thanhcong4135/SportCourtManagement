@@ -17,6 +17,7 @@ import java.util.UUID;
 public class BookingOutboxService {
 
     private static final String AGGREGATE_TYPE = "BOOKING";
+    private static final String SCHEMA_VERSION = "1.0";
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
@@ -49,6 +50,7 @@ public class BookingOutboxService {
 
     private String toPayload(UUID eventId, BookingEventType type, Booking booking) {
         BookingEvent event = new BookingEvent();
+        event.setSchemaVersion(SCHEMA_VERSION);
         event.setEventId(eventId);
         event.setType(type);
         event.setBookingId(booking.getId());

@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public class PaymentEvent {
+    private String schemaVersion;
     private UUID eventId;
     private PaymentEventType type;
     private UUID paymentId;
@@ -20,6 +21,14 @@ public class PaymentEvent {
 
     public void setEventId(UUID eventId) {
         this.eventId = eventId;
+    }
+
+    public String getSchemaVersion() {
+        return schemaVersion;
+    }
+
+    public void setSchemaVersion(String schemaVersion) {
+        this.schemaVersion = schemaVersion;
     }
 
     public PaymentEventType getType() {

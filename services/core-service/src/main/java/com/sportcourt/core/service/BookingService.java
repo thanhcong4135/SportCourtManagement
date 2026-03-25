@@ -1,7 +1,9 @@
 package com.sportcourt.core.service;
 
 import com.sportcourt.core.domain.Booking;
+import com.sportcourt.core.domain.BookingActionIdempotency;
 import com.sportcourt.core.domain.Court;
+import com.sportcourt.core.domain.enums.BookingActionType;
 import com.sportcourt.core.domain.enums.BookingStatus;
 import com.sportcourt.core.domain.enums.PaymentStatus;
 import com.sportcourt.core.api.PageResponse;
@@ -20,11 +22,13 @@ import com.sportcourt.core.event.PaymentEventType;
 import com.sportcourt.core.event.BookingOutboxService;
 import com.sportcourt.core.event.BookingEventType;
 import com.sportcourt.core.repository.BookingRepository;
+import com.sportcourt.core.repository.BookingActionIdempotencyRepository;
 import com.sportcourt.core.repository.CourtRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +45,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -48,19 +53,23 @@ import java.util.UUID;
 public class BookingService {
 
     private static final int SLOT_MINUTES = 30;
+    private static final int IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 
     private final BookingRepository bookingRepository;
+    private final BookingActionIdempotencyRepository bookingActionIdempotencyRepository;
     private final CourtRepository courtRepository;
     private final BookingOutboxService bookingOutboxService;
     private final ZoneId responseZoneId;
     private final boolean autoConfirmOnDepositSuccess;
 
     public BookingService(BookingRepository bookingRepository,
+                          BookingActionIdempotencyRepository bookingActionIdempotencyRepository,
                           CourtRepository courtRepository,
                           BookingOutboxService bookingOutboxService,
                           @Value("${app.time.response-zone:Asia/Ho_Chi_Minh}") String responseZone,
                           @Value("${booking.payment.auto-confirm-on-deposit-success:true}") boolean autoConfirmOnDepositSuccess) {
         this.bookingRepository = bookingRepository;
+        this.bookingActionIdempotencyRepository = bookingActionIdempotencyRepository;
         this.courtRepository = courtRepository;
         this.bookingOutboxService = bookingOutboxService;
         this.responseZoneId = ZoneId.of(responseZone);
@@ -78,11 +87,37 @@ public class BookingService {
 
     @Transactional
     public BookingResponse createDraft(BookingDraftRequest req) {
-        Court court = courtRepository.findByIdForUpdate(req.courtId())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Court not found"));
+        return createDraft(req, null);
+    }
 
-        Booking saved = createDraftInternal(court, req.customerId(), req.startTime(), req.endTime(), req.priceTotal());
-        return toResponse(saved);
+    @Transactional
+    public BookingResponse createDraft(BookingDraftRequest req, String idempotencyKey) {
+        String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+        Booking existingBooking = findExistingByIdempotencyKey(req, normalizedIdempotencyKey);
+        if (existingBooking != null) {
+            return toResponse(existingBooking);
+        }
+
+        Court court = lockCourtForUpdate(req.courtId());
+
+        try {
+            Booking saved = createDraftInternal(
+                court,
+                req.customerId(),
+                req.startTime(),
+                req.endTime(),
+                req.priceTotal(),
+                normalizedIdempotencyKey
+            );
+            return toResponse(saved);
+        } catch (DataIntegrityViolationException ex) {
+            if (normalizedIdempotencyKey == null) {
+                throw ex;
+            }
+            Booking replayBooking = loadExistingByIdempotencyKey(req.customerId(), normalizedIdempotencyKey);
+            assertSameDraftPayload(replayBooking, req);
+            return toResponse(replayBooking);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +149,14 @@ public class BookingService {
 
         for (BookingDraftItemRequest item : req.items()) {
             Court court = lockedCourts.get(item.courtId());
-            Booking saved = createDraftInternal(court, req.customerId(), item.startTime(), item.endTime(), item.priceTotal());
+            Booking saved = createDraftInternal(
+                court,
+                req.customerId(),
+                item.startTime(),
+                item.endTime(),
+                item.priceTotal(),
+                null
+            );
             responses.add(toResponse(saved));
             totalPrice = totalPrice.add(saved.getPriceTotal());
             totalDeposit = totalDeposit.add(saved.getDepositRequired());
@@ -125,9 +167,28 @@ public class BookingService {
 
     @Transactional
     public BookingResponse payDeposit(UUID bookingId, DepositPaymentRequest req) {
+        return payDeposit(bookingId, req, null);
+    }
+
+    @Transactional
+    public BookingResponse payDeposit(UUID bookingId, DepositPaymentRequest req, String idempotencyKey) {
         Booking booking = bookingRepository.findByIdForUpdate(bookingId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+
+        String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+        String requestFingerprint = fingerprintDepositRequest(req);
+        Booking replayBooking = resolveActionReplay(
+            booking,
+            BookingActionType.DEPOSIT,
+            normalizedIdempotencyKey,
+            requestFingerprint
+        );
+        if (replayBooking != null) {
+            return toResponse(replayBooking);
+        }
+
         Booking saved = applyDeposit(booking, req.amount());
+        saveActionIdempotency(saved.getId(), BookingActionType.DEPOSIT, normalizedIdempotencyKey, requestFingerprint);
         return toResponse(saved);
     }
 
@@ -148,9 +209,29 @@ public class BookingService {
 
     @Transactional
     public BookingResponse confirm(UUID bookingId) {
+        return confirm(bookingId, null);
+    }
+
+    @Transactional
+    public BookingResponse confirm(UUID bookingId, String idempotencyKey) {
         Booking booking = bookingRepository.findByIdForUpdate(bookingId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+
+        String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+        Booking replayBooking = resolveActionReplay(
+            booking,
+            BookingActionType.CONFIRM,
+            normalizedIdempotencyKey,
+            BookingActionType.CONFIRM.name()
+        );
+        if (replayBooking != null) {
+            return toResponse(replayBooking);
+        }
+
+        // Reserve/confirm flows must serialize by court to prevent race conditions.
+        lockCourtForUpdate(booking.getCourt().getId());
         Booking saved = confirmInternal(booking);
+        saveActionIdempotency(saved.getId(), BookingActionType.CONFIRM, normalizedIdempotencyKey, BookingActionType.CONFIRM.name());
         return toResponse(saved);
     }
 
@@ -166,8 +247,7 @@ public class BookingService {
             .sorted(Comparator.comparing(UUID::toString))
             .toList();
         for (UUID courtId : courtIds) {
-            courtRepository.findByIdForUpdate(courtId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Court not found"));
+            lockCourtForUpdate(courtId);
         }
 
         List<Booking> updated = new ArrayList<>();
@@ -181,16 +261,34 @@ public class BookingService {
 
     @Transactional
     public BookingResponse cancel(UUID bookingId) {
-        Booking booking = bookingRepository.findById(bookingId)
+        return cancel(bookingId, null);
+    }
+
+    @Transactional
+    public BookingResponse cancel(UUID bookingId, String idempotencyKey) {
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
 
+        String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+        Booking replayBooking = resolveActionReplay(
+            booking,
+            BookingActionType.CANCEL,
+            normalizedIdempotencyKey,
+            BookingActionType.CANCEL.name()
+        );
+        if (replayBooking != null) {
+            return toResponse(replayBooking);
+        }
+
         if (booking.getStatus() == BookingStatus.CANCELED) {
+            saveActionIdempotency(booking.getId(), BookingActionType.CANCEL, normalizedIdempotencyKey, BookingActionType.CANCEL.name());
             return toResponse(booking);
         }
 
         booking.setStatus(BookingStatus.CANCELED);
         Booking saved = bookingRepository.save(booking);
         bookingOutboxService.enqueue(BookingEventType.BOOKING_CANCELED, saved);
+        saveActionIdempotency(saved.getId(), BookingActionType.CANCEL, normalizedIdempotencyKey, BookingActionType.CANCEL.name());
         return toResponse(saved);
     }
 
@@ -249,18 +347,121 @@ public class BookingService {
             .distinct()
             .sorted(Comparator.comparing(UUID::toString))
             .forEach(courtId -> {
-                Court court = courtRepository.findByIdForUpdate(courtId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Court not found"));
-                result.put(courtId, court);
+                result.put(courtId, lockCourtForUpdate(courtId));
             });
         return result;
+    }
+
+    private Court lockCourtForUpdate(UUID courtId) {
+        return courtRepository.findByIdForUpdate(courtId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Court not found"));
+    }
+
+    private Booking findExistingByIdempotencyKey(BookingDraftRequest req, String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return null;
+        }
+        if (req.customerId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Idempotency key requires customerId");
+        }
+
+        return bookingRepository.findByCustomerIdAndIdempotencyKey(req.customerId(), idempotencyKey)
+            .map(existing -> {
+                assertSameDraftPayload(existing, req);
+                return existing;
+            })
+            .orElse(null);
+    }
+
+    private Booking loadExistingByIdempotencyKey(UUID customerId, String idempotencyKey) {
+        if (customerId == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency conflict but customerId is missing");
+        }
+        return bookingRepository.findByCustomerIdAndIdempotencyKey(customerId, idempotencyKey)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency conflict"));
+    }
+
+    private void assertSameDraftPayload(Booking existing, BookingDraftRequest req) {
+        OffsetDateTime normalizedStart = normalizeToUtc(req.startTime());
+        OffsetDateTime normalizedEnd = normalizeToUtc(req.endTime());
+        boolean samePayload = existing.getCourt().getId().equals(req.courtId())
+            && existing.getStartTime().equals(normalizedStart)
+            && existing.getEndTime().equals(normalizedEnd)
+            && existing.getPriceTotal().compareTo(req.priceTotal()) == 0;
+        if (!samePayload) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key reused with different payload");
+        }
+    }
+
+    private String normalizeIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return null;
+        }
+        String normalized = idempotencyKey.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        if (normalized.length() > IDEMPOTENCY_KEY_MAX_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Idempotency key is too long");
+        }
+        return normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private Booking resolveActionReplay(Booking booking,
+                                        BookingActionType actionType,
+                                        String idempotencyKey,
+                                        String requestFingerprint) {
+        if (idempotencyKey == null) {
+            return null;
+        }
+
+        return bookingActionIdempotencyRepository
+            .findByBookingIdAndActionTypeAndIdempotencyKey(booking.getId(), actionType, idempotencyKey)
+            .map(existingRecord -> {
+                if (!existingRecord.getRequestFingerprint().equals(requestFingerprint)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key reused with different payload");
+                }
+                return booking;
+            })
+            .orElse(null);
+    }
+
+    private String fingerprintDepositRequest(DepositPaymentRequest req) {
+        return "amount:" + req.amount().stripTrailingZeros().toPlainString();
+    }
+
+    private void saveActionIdempotency(UUID bookingId,
+                                       BookingActionType actionType,
+                                       String idempotencyKey,
+                                       String requestFingerprint) {
+        if (idempotencyKey == null) {
+            return;
+        }
+
+        BookingActionIdempotency actionIdempotency = new BookingActionIdempotency();
+        actionIdempotency.setBookingId(bookingId);
+        actionIdempotency.setActionType(actionType);
+        actionIdempotency.setIdempotencyKey(idempotencyKey);
+        actionIdempotency.setRequestFingerprint(requestFingerprint);
+        actionIdempotency.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        try {
+            bookingActionIdempotencyRepository.save(actionIdempotency);
+        } catch (DataIntegrityViolationException ex) {
+            BookingActionIdempotency existingRecord = bookingActionIdempotencyRepository
+                .findByBookingIdAndActionTypeAndIdempotencyKey(bookingId, actionType, idempotencyKey)
+                .orElseThrow(() -> ex);
+            if (!existingRecord.getRequestFingerprint().equals(requestFingerprint)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key reused with different payload");
+            }
+        }
     }
 
     private Booking createDraftInternal(Court court,
                                         UUID customerId,
                                         OffsetDateTime startTime,
                                         OffsetDateTime endTime,
-                                        BigDecimal priceTotal) {
+                                        BigDecimal priceTotal,
+                                        String idempotencyKey) {
         OffsetDateTime normalizedStart = normalizeToUtc(startTime);
         OffsetDateTime normalizedEnd = normalizeToUtc(endTime);
 
@@ -275,6 +476,7 @@ public class BookingService {
         Booking booking = new Booking();
         booking.setCourt(court);
         booking.setCustomerId(customerId);
+        booking.setIdempotencyKey(idempotencyKey);
         booking.setStatus(BookingStatus.DRAFT);
         booking.setPaymentStatus(PaymentStatus.UNPAID);
         booking.setStartTime(normalizedStart);
@@ -356,6 +558,7 @@ public class BookingService {
         }
 
         if (autoConfirmOnDepositSuccess && saved.getStatus() == BookingStatus.DRAFT) {
+            lockCourtForUpdate(saved.getCourt().getId());
             saved = confirmInternal(saved);
         }
         return saved;

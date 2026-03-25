@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -46,6 +47,7 @@ public class BookingController {
 
     @PostMapping("/draft")
     public ResponseEntity<ApiResponse<BookingResponse>> draft(@Valid @RequestBody BookingDraftRequest req,
+                                                              @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                                               @AuthenticationPrincipal Jwt jwt) {
         UUID customerId = resolveCustomerId(req.customerId(), jwt);
         BookingDraftRequest effectiveReq = new BookingDraftRequest(
@@ -55,7 +57,7 @@ public class BookingController {
             req.endTime(),
             req.priceTotal()
         );
-        BookingResponse response = bookingService.createDraft(effectiveReq);
+        BookingResponse response = bookingService.createDraft(effectiveReq, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
@@ -98,9 +100,10 @@ public class BookingController {
     @PostMapping("/{id}/deposit")
     public ApiResponse<BookingResponse> deposit(@PathVariable UUID id,
                                                 @Valid @RequestBody DepositPaymentRequest req,
+                                                @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                                 @AuthenticationPrincipal Jwt jwt) {
         verifyCustomerOwnership(bookingService.getById(id), jwt);
-        return ApiResponse.success(bookingService.payDeposit(id, req));
+        return ApiResponse.success(bookingService.payDeposit(id, req, idempotencyKey));
     }
 
     @PostMapping("/deposit/batch")
@@ -114,9 +117,10 @@ public class BookingController {
 
     @PostMapping("/{id}/confirm")
     public ApiResponse<BookingResponse> confirm(@PathVariable UUID id,
+                                                @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                                 @AuthenticationPrincipal Jwt jwt) {
         verifyCustomerOwnership(bookingService.getById(id), jwt);
-        return ApiResponse.success(bookingService.confirm(id));
+        return ApiResponse.success(bookingService.confirm(id, idempotencyKey));
     }
 
     @PostMapping("/confirm/batch")
@@ -130,9 +134,10 @@ public class BookingController {
 
     @PostMapping("/{id}/cancel")
     public ApiResponse<BookingResponse> cancel(@PathVariable UUID id,
+                                               @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                                @AuthenticationPrincipal Jwt jwt) {
         verifyCustomerOwnership(bookingService.getById(id), jwt);
-        return ApiResponse.success(bookingService.cancel(id));
+        return ApiResponse.success(bookingService.cancel(id, idempotencyKey));
     }
 
     private UUID resolveCustomerId(UUID requestedCustomerId, Jwt jwt) {

@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class PaymentEventConsumer {
 
+    private static final String SUPPORTED_SCHEMA_VERSION = "1.0";
+
     private final ObjectMapper objectMapper;
     private final PaymentEventProcessor paymentEventProcessor;
 
@@ -30,6 +32,7 @@ public class PaymentEventConsumer {
                                     @Header(name = "event-id", required = false) String headerEventId) {
         try {
             PaymentEvent paymentEvent = objectMapper.readValue(payload, PaymentEvent.class);
+            validateSchemaVersion(paymentEvent.getSchemaVersion());
             String eventId = resolveEventId(paymentEvent, headerEventId);
             paymentEventProcessor.process(paymentEvent, topic, eventId);
         } catch (Exception ex) {
@@ -48,5 +51,14 @@ public class PaymentEventConsumer {
             return paymentEvent.getPaymentId() + "-" + paymentEvent.getType().name();
         }
         return null;
+    }
+
+    private void validateSchemaVersion(String schemaVersion) {
+        if (schemaVersion == null || schemaVersion.isBlank()) {
+            return;
+        }
+        if (!SUPPORTED_SCHEMA_VERSION.equals(schemaVersion)) {
+            throw new IllegalArgumentException("Unsupported payment event schemaVersion: " + schemaVersion);
+        }
     }
 }

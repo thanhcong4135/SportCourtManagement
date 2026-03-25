@@ -36,6 +36,9 @@ public class Booking {
     @Column(name = "customer_id")
     private UUID customerId;
 
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BookingStatus status;

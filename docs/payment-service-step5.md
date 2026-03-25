@@ -12,6 +12,9 @@
 - `POST /api/payments/callback`
   - Mark payment `SUCCESS`/`FAILED` and publish event.
   - Requires header `X-Payment-Callback-Secret` if `payment.callback.shared-secret` is configured.
+  - Optional HMAC headers when enabled:
+    - `X-Payment-Signature`
+    - `X-Payment-Timestamp` (unix epoch seconds)
 - `GET /api/payments/{paymentId}`
   - Get payment by id.
 - `GET /api/payments/booking/{bookingId}`
@@ -43,4 +46,11 @@
   - `provider`
   - `checkoutUrl`
 - Payment service da bat JWT auth cho API nghiep vu (`initiate`, `get`, `list`) va giu callback endpoint theo shared secret de tiep nhan webhook provider.
+- Callback co che signature da san sang cho sandbox provider qua config:
+  - `payment.callback.signature.enabled`
+  - `payment.callback.signature.secret`
+  - `payment.callback.signature.max-skew-seconds`
 - Event `payment.events` da publish qua outbox scheduler (khong push truc tiep trong callback transaction).
+- Outbox observability:
+  - metrics: `outbox.events.pending`, `outbox.events.failed`
+  - health indicator: `outbox` (`/actuator/health/outbox`)
