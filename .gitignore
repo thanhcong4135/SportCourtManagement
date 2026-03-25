@@ -1,0 +1,16 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Dev keys (local only)
+services/auth-service/src/main/resources/keys/*.pem
+
+# Build outputs
+**/target/
+
+# Local Maven cache inside service folders
+**/.m2repo/
+
+# Logs
+*.log
