@@ -865,3 +865,306 @@ File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservice
     - Goi callback kem header `X-Payment-Callback-Secret`.
   - Cap nhat huong dan:
     - `docs/core-payment-cross-service-e2e.md`.
+
+### 2026-03-24 - Hoan tat Step tiep theo theo thu tu (Contract + CI E2E + Payment reliability)
+- Yeu cau: "thuc hien lan luot di".
+- Muc dich:
+  - Chot contract event giua `core-service` va `payment-service`.
+  - Tang release gate bang E2E smoke qua gateway trong CI.
+  - Tang do an toan callback payment va observability outbox.
+- Hanh dong:
+  - Step 1 (Contract versioning):
+    - Them `schemaVersion` cho event payload:
+      - `services/core-service/src/main/java/com/sportcourt/core/event/BookingEvent.java`
+      - `services/core-service/src/main/java/com/sportcourt/core/event/PaymentEvent.java`
+      - `services/payment-service/src/main/java/com/sportcourt/payment/event/PaymentEvent.java`
+    - Producer set mac dinh `schemaVersion=1.0`:
+      - `services/core-service/src/main/java/com/sportcourt/core/event/BookingOutboxService.java`
+      - `services/payment-service/src/main/java/com/sportcourt/payment/event/PaymentOutboxService.java`
+    - Consumer validate schema supported:
+      - `services/core-service/src/main/java/com/sportcourt/core/consumer/PaymentEventConsumer.java`
+      - `services/payment-service/src/main/java/com/sportcourt/payment/consumer/BookingEventConsumer.java`
+    - Them test:
+      - `services/core-service/src/test/java/com/sportcourt/core/consumer/PaymentEventConsumerTest.java`
+      - `services/payment-service/src/test/java/com/sportcourt/payment/consumer/BookingEventConsumerTest.java`
+    - Them tai lieu contract:
+      - `docs/event-contracts.md`
+  - Step 2 (CI E2E gate):
+    - Them script smoke E2E gateway-core-payment:
+      - `scripts/e2e-gateway-core-payment.ps1`
+    - Them huong dan:
+      - `docs/gateway-core-payment-e2e.md`
+    - Mo rong workflow:
+      - `.github/workflows/backend-ci.yml`
+      - them job `e2e-gateway-core-payment` (compose up -> run script -> logs on failure -> compose down).
+  - Step 3 (Payment callback signature):
+    - Them verify chu ky HMAC + timestamp skew:
+      - `services/payment-service/src/main/java/com/sportcourt/payment/service/PaymentService.java`
+      - `services/payment-service/src/main/java/com/sportcourt/payment/controller/PaymentController.java`
+    - Them config:
+      - `services/payment-service/src/main/resources/application.yml`
+      - `services/payment-service/src/test/resources/application-test.yml`
+    - Them test:
+      - `services/payment-service/src/test/java/com/sportcourt/payment/service/PaymentServiceSignatureValidationTest.java`
+  - Step 4 (Outbox observability payment-service):
+    - Them metrics + health indicator:
+      - `services/payment-service/src/main/java/com/sportcourt/payment/monitoring/OutboxMetrics.java`
+      - `services/payment-service/src/main/java/com/sportcourt/payment/monitoring/OutboxHealthIndicator.java`
+    - Mo rong repository:
+      - `services/payment-service/src/main/java/com/sportcourt/payment/repository/OutboxEventRepository.java`
+    - Them test:
+      - `services/payment-service/src/test/java/com/sportcourt/payment/monitoring/OutboxHealthIndicatorTest.java`
+    - Cap nhat doc:
+      - `docs/payment-service-step5.md`
+      - `docs/backend-step6-ci-observability.md`
+- Verify:
+  - `services/payment-service`:
+    - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=BookingEventConsumerTest,PaymentServiceSignatureValidationTest,OutboxHealthIndicatorTest,PaymentServiceIntegrationTest" test -q` => pass.
+  - `services/core-service`:
+    - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PaymentEventConsumerTest" test -q` => pass.
+  - `services/api-gateway`:
+    - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` => pass.
+
+### 2026-03-24 - Uu tien tiep theo: anti double-booking + idempotency cho write API
+- Yeu cau: "thuc hien lan luot di" sau khi thong nhat bo qua step 5 tam thoi.
+- Muc dich:
+  - Giam rui ro race condition dat trung khung gio.
+  - Them idempotency cho API tao draft de tranh tao booking trung do retry/client double submit.
+- Hanh dong:
+  - Core anti double-booking hardening:
+    - Dam bao luong confirm lock theo `court` (pessimistic) truoc khi confirm:
+      - `services/core-service/src/main/java/com/sportcourt/core/service/BookingService.java`
+    - Auto-confirm khi nhan `payment.events` cung lock `court` truoc khi doi trang thai.
+    - Refactor helper lock court dung chung de giam sai sot.
+  - Idempotency cho `POST /api/core/bookings/draft`:
+    - Ho tro header `Idempotency-Key` tai controller:
+      - `services/core-service/src/main/java/com/sportcourt/core/controller/BookingController.java`
+    - Them luu vet idempotency trong booking:
+      - `services/core-service/src/main/java/com/sportcourt/core/domain/Booking.java`
+      - `services/core-service/src/main/resources/db/migration/V6__booking_idempotency_key.sql`
+    - Them tra cuu idempotency:
+      - `services/core-service/src/main/java/com/sportcourt/core/repository/BookingRepository.java`
+    - Logic service:
+      - Cung key + cung payload => tra lai booking cu.
+      - Cung key + payload khac => `409 CONFLICT`.
+      - Co xu ly race khi save (bat `DataIntegrityViolationException` roi replay doc lai theo key).
+      - file: `services/core-service/src/main/java/com/sportcourt/core/service/BookingService.java`
+  - Them test:
+    - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+    - bo sung 2 case:
+      - replay cung idempotency key tra cung booking.
+      - key giong nhau nhung payload khac -> `409`.
+- Verify:
+  - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=BookingServiceIntegrationTest" test -q` (core-service) => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` (core-service) => pass.
+
+### 2026-03-25 - Mo rong idempotency cho write APIs con lai (deposit/confirm/cancel)
+- Yeu cau: user "dong y" tiep tuc lam idempotency cho write APIs con lai.
+- Muc dich:
+  - Tranh duplicate side-effect khi client retry/call lai endpoint ghi du lieu.
+  - Dam bao replay cung key tra ket qua on dinh, khong phat them outbox event.
+- Hanh dong:
+  - Them idempotency store rieng cho action theo booking:
+    - `services/core-service/src/main/java/com/sportcourt/core/domain/BookingActionIdempotency.java`
+    - `services/core-service/src/main/java/com/sportcourt/core/domain/enums/BookingActionType.java`
+    - `services/core-service/src/main/java/com/sportcourt/core/repository/BookingActionIdempotencyRepository.java`
+    - `services/core-service/src/main/resources/db/migration/V7__booking_action_idempotency.sql`
+  - Mo rong API header `Idempotency-Key` cho endpoint:
+    - `POST /api/core/bookings/{id}/deposit`
+    - `POST /api/core/bookings/{id}/confirm`
+    - `POST /api/core/bookings/{id}/cancel`
+    - file: `services/core-service/src/main/java/com/sportcourt/core/controller/BookingController.java`
+  - Mo rong logic service:
+    - Replay cung key + cung payload => tra lai booking hien tai.
+    - Cung key + payload khac => `409 CONFLICT`.
+    - Co xu ly race insert key (unique constraint) bang catch `DataIntegrityViolationException`.
+    - file: `services/core-service/src/main/java/com/sportcourt/core/service/BookingService.java`
+  - On dinh test env:
+    - Scheduler config cho phep tat bang property de tranh flaky test:
+      - `services/core-service/src/main/java/com/sportcourt/core/config/SchedulingConfig.java`
+      - `services/core-service/src/main/resources/application.yml`
+      - `services/core-service/src/test/resources/application-test.yml`
+  - Bo sung test integration:
+    - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+    - Them case cho deposit/confirm idempotency (replay + conflict payload).
+- Verify:
+  - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=BookingServiceIntegrationTest" test -q` => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=BookingLifecycleSchedulerTest,OutboxPublisherSchedulerTest" test -q` => pass.
+  - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` => pass.
+
+### 2026-03-25 - Hoan tat verify migration JWT RS256 + JWKS (step hardening security)
+- Yeu cau: user "dong y" tiep tuc buoc security hardening JWT.
+- Muc dich:
+  - Chot migration tu shared secret HS256 sang RS256 + JWKS.
+  - Xac nhan test gate cua auth/core/payment/gateway van pass sau thay doi.
+- Hanh dong:
+  - Da verify lai test security gateway:
+    - `services/api-gateway`: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=GatewaySecurityIntegrationTest" test -q` => pass.
+  - Da verify lai test cot loi cua core/payment/auth:
+    - `services/core-service`: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=BookingServiceIntegrationTest" test -q` => pass.
+    - `services/payment-service`: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PaymentServiceIntegrationTest" test -q` => pass.
+    - `services/auth-service`: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=AuthServiceIntegrationTest" test -q` => pass.
+- File anh huong:
+  - `WORK_LOG.md`
+- Ghi chu:
+  - Phan migrate RS256/JWKS da o trang thai verify test gate.
+  - Cac script E2E PowerShell dang dung HS256 can doi qua flow RS256/JWKS de chay full E2E moi.
+
+### 2026-03-25 - Dong bo script E2E sang JWT RS256/JWKS
+- Yeu cau: user "dong y" cap nhat script E2E de tuong thich sau migration JWT.
+- Muc dich:
+  - Bo self-token HS256 cu.
+  - Dam bao script E2E co the chay voi model JWT moi (RS256 + issuer + JWKS).
+- Hanh dong:
+  - Cap nhat 3 script:
+    - `scripts/e2e-core-payment.ps1`
+    - `scripts/e2e-gateway-core-payment.ps1`
+    - `scripts/e2e-gateway-auth.ps1`
+  - Doi ham tao JWT tu HS256 sang RS256, bo sung claim `iss` va header `kid`.
+  - Bo sung tham so script:
+    - `JwtIssuer`
+    - `JwtKid`
+    - `JwtPrivateKeyPath`
+    - (giu `PaymentCallbackSecret` nhu cu)
+  - Bo sung health check `auth-service` cho script core/gateway-core-payment.
+  - Cap nhat docs lien quan:
+    - `docs/core-payment-cross-service-e2e.md`
+    - `docs/gateway-core-payment-e2e.md`
+    - `docs/gateway-auth-cross-service-e2e.md`
+    - `docs/core-service-openapi.md`
+- File anh huong:
+  - `WORK_LOG.md`
+  - `scripts/e2e-core-payment.ps1`
+  - `scripts/e2e-gateway-core-payment.ps1`
+  - `scripts/e2e-gateway-auth.ps1`
+  - `docs/core-payment-cross-service-e2e.md`
+  - `docs/gateway-core-payment-e2e.md`
+  - `docs/gateway-auth-cross-service-e2e.md`
+  - `docs/core-service-openapi.md`
+- Ghi chu:
+  - Script co fallback ky RS256 cho PowerShell 5.1 (Windows) va PowerShell 7+.
+
+### 2026-03-25 - Tang kha nang debug script E2E khi service chua mo
+- Yeu cau: user bao loi `Unable to connect to the remote server` khi chay `scripts/e2e-core-payment.ps1`.
+- Muc dich: de user biet ro service nao dang khong reachable thay vi loi chung chung.
+- Hanh dong:
+  - Them ham `Assert-HealthEndpoint` cho 3 script:
+    - `scripts/e2e-core-payment.ps1`
+    - `scripts/e2e-gateway-core-payment.ps1`
+    - `scripts/e2e-gateway-auth.ps1`
+  - Health check dau script gio in ro URL tung service va throw thong diep co ten service.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `scripts/e2e-core-payment.ps1`
+  - `scripts/e2e-gateway-core-payment.ps1`
+  - `scripts/e2e-gateway-auth.ps1`
+
+### 2026-03-25 - Fix runtime infra va verify E2E qua gateway thanh cong
+- Yeu cau: user dong y chay tiep full flow qua gateway.
+- Muc dich:
+  - Dam bao stack Docker chay on dinh cho E2E event-driven.
+  - Verify `gateway -> core/payment/auth` full luong dat san + callback.
+- Hanh dong:
+  - Fix conflict port DB local:
+    - cap nhat `.env` voi `MYSQL_CORE_PORT=13306`, `MYSQL_PAYMENT_PORT=13307`, `MYSQL_AUTH_PORT=13308`.
+  - Fix Kafka compose listeners de container-to-container ket noi duoc:
+    - cap nhat `infra/docker/docker-compose.yml` cho dual listeners:
+      - internal: `PLAINTEXT://sc-kafka:9092`
+      - host: `PLAINTEXT_HOST://localhost:9092`
+  - Rebuild/recreate stack va verify:
+    - chay `scripts/e2e-core-payment.ps1` => SUCCESS.
+    - chay `scripts/e2e-gateway-core-payment.ps1` => SUCCESS.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `.env`
+  - `infra/docker/docker-compose.yml`
+
+### 2026-03-25 - Step 2 Observability: Prometheus + Grafana + Alertmanager
+- Yeu cau: "ok gio thi thuc hien tiep buoc 2" (observability he thong).
+- Muc dich:
+  - Co stack monitoring tap trung cho toan bo backend.
+  - Co dashboard/alert rule baseline de theo doi production readiness.
+- Hanh dong:
+  - Mo metrics endpoint Prometheus:
+    - Them `micrometer-registry-prometheus` vao 7 service (`api-gateway`, `auth-service`, `core-service`, `payment-service`, `notification-service`, `reporting-service`, `chatbot-service`).
+    - Mo `management.endpoints.web.exposure.include: health,info,metrics,prometheus` cho tat ca service.
+  - Security allowlist metrics endpoint:
+    - Permit `/actuator/prometheus` trong:
+      - `services/core-service/src/main/java/com/sportcourt/core/config/SecurityConfig.java`
+      - `services/payment-service/src/main/java/com/sportcourt/payment/config/SecurityConfig.java`
+      - `services/auth-service/src/main/java/com/sportcourt/auth/config/SecurityConfig.java`
+      - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/SecurityConfig.java`
+  - Them stack observability vao compose:
+    - `prometheus`, `grafana`, `alertmanager` trong `infra/docker/docker-compose.yml`.
+    - Them config:
+      - `infra/docker/observability/prometheus/prometheus.yml`
+      - `infra/docker/observability/prometheus/alerts.yml`
+      - `infra/docker/observability/alertmanager/alertmanager.yml`
+      - `infra/docker/observability/grafana/provisioning/datasources/datasource.yml`
+      - `infra/docker/observability/grafana/provisioning/dashboards/dashboard-provider.yml`
+      - `infra/docker/observability/grafana/provisioning/dashboards/json/backend-overview.json`
+    - Them env port monitoring vao `.env`:
+      - `PROMETHEUS_PORT`, `GRAFANA_PORT`, `ALERTMANAGER_PORT`.
+  - Verify runtime:
+    - `docker compose --env-file .env -f infra/docker/docker-compose.yml config` => pass.
+    - `mvn "-Dmaven.repo.local=.m2repo" -DskipTests test-compile -q` cho 7 service => pass.
+    - `docker compose ... up -d --build` cho backend services + monitoring => pass.
+    - Prometheus targets: 8/8 `UP`.
+    - Prometheus rules loaded: `backend-availability`, `backend-domain-signals`.
+    - Grafana health API ok va dashboard provision thanh cong (`SportCourt Backend Overview`).
+- File anh huong:
+  - `.env`
+  - `infra/docker/docker-compose.yml`
+  - `infra/docker/observability/prometheus/prometheus.yml`
+  - `infra/docker/observability/prometheus/alerts.yml`
+  - `infra/docker/observability/alertmanager/alertmanager.yml`
+  - `infra/docker/observability/grafana/provisioning/datasources/datasource.yml`
+  - `infra/docker/observability/grafana/provisioning/dashboards/dashboard-provider.yml`
+  - `infra/docker/observability/grafana/provisioning/dashboards/json/backend-overview.json`
+  - `services/api-gateway/pom.xml`
+  - `services/auth-service/pom.xml`
+  - `services/core-service/pom.xml`
+  - `services/payment-service/pom.xml`
+  - `services/notification-service/pom.xml`
+  - `services/reporting-service/pom.xml`
+  - `services/chatbot-service/pom.xml`
+  - `services/api-gateway/src/main/resources/application.yml`
+  - `services/auth-service/src/main/resources/application.yml`
+  - `services/core-service/src/main/resources/application.yml`
+  - `services/payment-service/src/main/resources/application.yml`
+  - `services/notification-service/src/main/resources/application.yml`
+  - `services/reporting-service/src/main/resources/application.yml`
+  - `services/chatbot-service/src/main/resources/application.yml`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/SecurityConfig.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/config/SecurityConfig.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/SecurityConfig.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/config/SecurityConfig.java`
+  - `docs/backend-step6-ci-observability.md`
+  - `docs/backend-step7-observability.md`
+
+### 2026-03-25 - Don dep lich su GitHub: loai bo secret/build artifacts khoi remote
+- Yeu cau: Xoa cac file khong nen len GitHub (nhu `.env`, `target`, `.m2repo`, key PEM dev) khoi repo da publish.
+- Muc dich:
+  - Loai bo cac file nhay cam va file build khoi lich su GitHub.
+  - Tranh push lai cac file nay trong tuong lai.
+- Hanh dong:
+  - Tao mirror clone tam thoi cua remote `origin` va rewrite history bang BFG.
+  - Loai bo khoi tat ca commit tren remote:
+    - `.env`
+    - thu muc `target`
+    - thu muc `.m2repo`
+    - file ten `dev-rs256-private.pem`, `dev-rs256-public.pem` (neu co trong history remote)
+  - Force push rewritten history len `origin/main`.
+  - Tao commit moi tren remote de them `.gitignore` voi rule bo qua:
+    - `.env`, `.env.*`
+    - `services/auth-service/src/main/resources/keys/*.pem`
+    - `**/target/`, `**/.m2repo/`, `*.log`
+  - Dong bo local:
+    - Fetch remote moi (`origin/main` da doi commit do rewrite history).
+    - Tao `.gitignore` tuong tu trong local working tree.
+- Ket qua:
+  - `origin/main` da doi tu `fe7c311` -> `dbbda50`.
+  - `git log --all -- .env` tren ban clone clean sau rewrite khong con lich su file nay.
+- File lien quan:
+  - `.gitignore`
+  - `WORK_LOG.md`
