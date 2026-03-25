@@ -11,15 +11,19 @@
       - `auth-service`: `AuthServiceIntegrationTest`
       - `payment-service`: `PaymentServiceIntegrationTest`
       - `api-gateway`: `GatewaySecurityIntegrationTest`
+  - `e2e-gateway-core-payment` job:
+    - build/start compose stack
+    - chay smoke E2E script `scripts/e2e-gateway-core-payment.ps1`
+    - dump compose logs khi fail
+    - teardown stack sau khi chay
 
 ## Muc dich
 
 - Chan merge neu build hoac test cot loi fail.
 - Dam bao thay doi tren mot service khong vo tinh lam hong service khac.
-- Giu chu ky feedback ngan (chi chay bo test nhanh, bo test E2E full flow de chay rieng).
+- Giu release gate co test flow thuc te qua gateway cho booking + payment callback.
 
 ## Buoc tiep theo de dat muc production day du
 
-- Them bo E2E workflow rieng (can Docker/Testcontainers san sang trong CI runner).
 - Them quality gate static analysis (SpotBugs/PMD/Checkstyle/Sonar).
-- Them metrics/alerting o cap he thong (Prometheus + Grafana + alert rule cho outbox pending/failed).
+- Metrics/alerting cap he thong da duoc trien khai tai `docs/backend-step7-observability.md`.

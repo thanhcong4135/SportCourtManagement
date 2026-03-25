@@ -57,13 +57,14 @@ services:
     image: confluentinc/cp-kafka:7.7.1
     container_name: sc-kafka
     ports:
-      - "9092:9092"
+      - "9092:29092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: "broker,controller"
-      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://localhost:9092"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,PLAINTEXT_HOST://:29092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://sc-kafka:9092,PLAINTEXT_HOST://localhost:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
       KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
       KAFKA_CONTROLLER_QUORUM_VOTERS: "1@sc-kafka:9093"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -84,6 +85,8 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: 123456
       KAFKA_BOOTSTRAP_SERVERS: sc-kafka:9092
+      APP_SECURITY_JWT_ISSUER: https://auth.sportcourt.local
+      APP_SECURITY_JWT_JWK_SET_URI: http://auth-service:8082/.well-known/jwks.json
     ports:
       - "8081:8081"
     depends_on:
@@ -99,6 +102,8 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: 123456
       KAFKA_BOOTSTRAP_SERVERS: sc-kafka:9092
+      APP_SECURITY_JWT_ISSUER: https://auth.sportcourt.local
+      APP_SECURITY_JWT_JWK_SET_URI: http://auth-service:8082/.well-known/jwks.json
     ports:
       - "8083:8083"
     depends_on:
@@ -115,7 +120,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-auth:3306/auth_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: 123456
-      APP_SECURITY_JWT_SECRET: change-this-dev-secret-to-a-long-random-value-32b
+      APP_SECURITY_JWT_ISSUER: https://auth.sportcourt.local
     ports:
       - "8082:8082"
     depends_on:
@@ -133,6 +138,8 @@ services:
       APP_DOWNSTREAM_NOTIFICATION_SERVICE_URL: http://notification-service:8084
       APP_DOWNSTREAM_REPORTING_SERVICE_URL: http://reporting-service:8085
       APP_DOWNSTREAM_CHATBOT_SERVICE_URL: http://chatbot-service:8086
+      APP_SECURITY_JWT_ISSUER: https://auth.sportcourt.local
+      APP_SECURITY_JWT_JWK_SET_URI: http://auth-service:8082/.well-known/jwks.json
     ports:
       - "8080:8080"
     depends_on:
@@ -163,8 +170,58 @@ services:
     ports:
       - "8086:8086"
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: sc-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - api-gateway
+      - auth-service
+      - core-service
+      - payment-service
+      - notification-service
+      - reporting-service
+      - chatbot-service
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: sc-alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: sc-grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   mysql_core_data:
   mysql_payment_data:
   mysql_auth_data:
   kafka_data:
+  prometheus_data:
+  grafana_data:

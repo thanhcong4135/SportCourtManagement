@@ -1,0 +1,49 @@
+groups:
+  - name: backend-availability
+    rules:
+      - alert: BackendServiceDown
+        expr: up{job=~"api-gateway|auth-service|core-service|payment-service|notification-service|reporting-service|chatbot-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.job }} for more than 1 minute."
+
+  - name: backend-domain-signals
+    rules:
+      - alert: OutboxFailedEventsDetected
+        expr: outbox_events_failed{job=~"core-service|payment-service"} > 0
+        for: 2m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Outbox failed events detected on {{ $labels.job }}"
+          description: "{{ $labels.job }} has {{ $value }} outbox event(s) in FAILED status."
+
+      - alert: CoreOutboxPublishFailures
+        expr: increase(outbox_publish_failure_total{job="core-service"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Core outbox publish failures are increasing"
+          description: "core-service recorded outbox publish failures in the last 5 minutes."
+
+      - alert: High5xxErrorRate
+        expr: |
+          (
+            sum by (job) (rate(http_server_requests_seconds_count{status=~"5..",job=~"api-gateway|auth-service|core-service|payment-service"}[5m]))
+            /
+            clamp_min(sum by (job) (rate(http_server_requests_seconds_count{job=~"api-gateway|auth-service|core-service|payment-service"}[5m])), 1)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High 5xx rate on {{ $labels.job }}"
+          description: "5xx ratio is above 5% for 10 minutes on {{ $labels.job }}."
