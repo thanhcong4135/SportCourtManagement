@@ -12,6 +12,7 @@
   - `docker compose -f infra/docker/docker-compose.yml up -d mysql-core mysql-payment kafka`
 - `core-service` is running on `http://localhost:8081`.
 - `payment-service` is running on `http://localhost:8083`.
+- `auth-service` is running on `http://localhost:8082` (JWKS endpoint for JWT validation).
 
 ## Run
 From repo root:
@@ -20,10 +21,13 @@ From repo root:
 powershell -ExecutionPolicy Bypass -File scripts/e2e-core-payment.ps1
 ```
 
-If your JWT secret is different from default:
+If your JWT key settings are different from default:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/e2e-core-payment.ps1 -JwtSecret "<your-secret>"
+powershell -ExecutionPolicy Bypass -File scripts/e2e-core-payment.ps1 `
+  -JwtIssuer "<your-issuer>" `
+  -JwtKid "<your-kid>" `
+  -JwtPrivateKeyPath "<path-to-rs256-private-key.pem>"
 ```
 
 If callback secret is different from default:
@@ -33,7 +37,7 @@ powershell -ExecutionPolicy Bypass -File scripts/e2e-core-payment.ps1 -PaymentCa
 ```
 
 ## What script does
-- Creates an OWNER JWT (HS256) with `app.security.jwt.secret`.
+- Creates an OWNER JWT (RS256) using local private key.
 - Uses JWT for payment query API (`GET /api/payments/booking/{bookingId}`).
 - Calls:
   - `POST /api/core/venues`

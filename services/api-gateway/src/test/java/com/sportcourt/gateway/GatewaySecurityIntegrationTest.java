@@ -3,7 +3,9 @@ package com.sportcourt.gateway;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,10 +45,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 @AutoConfigureWebTestClient
 class GatewaySecurityIntegrationTest {
 
-    private static final String JWT_SECRET = "change-this-dev-secret-to-a-long-random-value-32b";
+    private static final String JWT_ISSUER = "https://auth.sportcourt.local";
+    private static final String JWT_KID = "gateway-test-rs256-kid";
     private static final AtomicInteger CORE_REQUEST_COUNT = new AtomicInteger();
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Map<UUID, BookingStub> BOOKINGS = new ConcurrentHashMap<>();
+    private static RSAKey gatewayTestRsaKey;
 
     private static MockWebServer authService;
     private static MockWebServer coreService;
@@ -56,6 +60,10 @@ class GatewaySecurityIntegrationTest {
 
     @BeforeAll
     static void setUpServers() throws Exception {
+        gatewayTestRsaKey = new RSAKeyGenerator(2048)
+            .keyID(JWT_KID)
+            .generate();
+
         authService = new MockWebServer();
         coreService = new MockWebServer();
 
@@ -76,7 +84,8 @@ class GatewaySecurityIntegrationTest {
     static void registerProperties(DynamicPropertyRegistry registry) {
         registry.add("app.downstream.auth-service-url", () -> authService.url("/").toString().replaceAll("/$", ""));
         registry.add("app.downstream.core-service-url", () -> coreService.url("/").toString().replaceAll("/$", ""));
-        registry.add("app.security.jwt.secret", () -> JWT_SECRET);
+        registry.add("app.security.jwt.issuer-uri", () -> JWT_ISSUER);
+        registry.add("app.security.jwt.jwk-set-uri", () -> authService.url("/.well-known/jwks.json").toString());
     }
 
     @Test
@@ -273,6 +282,20 @@ class GatewaySecurityIntegrationTest {
     private static final class AuthDispatcher extends Dispatcher {
         @Override
         public MockResponse dispatch(RecordedRequest request) {
+            if ("GET".equals(request.getMethod()) && "/.well-known/jwks.json".equals(request.getPath())) {
+                try {
+                    String jwksPayload = MAPPER.writeValueAsString(
+                        Map.of("keys", List.of(gatewayTestRsaKey.toPublicJWK().toJSONObject()))
+                    );
+                    return new MockResponse()
+                        .setResponseCode(200)
+                        .addHeader("Content-Type", "application/json")
+                        .setBody(jwksPayload);
+                } catch (Exception ex) {
+                    return new MockResponse().setResponseCode(500);
+                }
+            }
+
             if ("POST".equals(request.getMethod()) && "/api/auth/login".equals(request.getPath())) {
                 String body = request.getBody().readUtf8();
                 boolean owner = body.contains("owner@test.com");
@@ -459,7 +482,7 @@ class GatewaySecurityIntegrationTest {
 
     private static String issueToken(UUID userId, String email, List<String> roles) throws JOSEException {
         JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
-            .issuer("sportcourt-auth")
+            .issuer(JWT_ISSUER)
             .subject(userId.toString())
             .issueTime(java.util.Date.from(Instant.now()))
             .expirationTime(java.util.Date.from(Instant.now().plusSeconds(3600)))
@@ -467,8 +490,11 @@ class GatewaySecurityIntegrationTest {
             .claim("roles", roles)
             .build();
 
-        SignedJWT signedJWT = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claimsSet);
-        signedJWT.sign(new MACSigner(JWT_SECRET.getBytes(StandardCharsets.UTF_8)));
+        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256)
+            .keyID(JWT_KID)
+            .build();
+        SignedJWT signedJWT = new SignedJWT(header, claimsSet);
+        signedJWT.sign(new RSASSASigner(gatewayTestRsaKey.toPrivateKey()));
         return signedJWT.serialize();
     }
 

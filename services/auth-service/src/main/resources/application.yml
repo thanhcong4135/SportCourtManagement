@@ -22,7 +22,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
 
 springdoc:
   api-docs:
@@ -33,9 +33,14 @@ springdoc:
 app:
   security:
     jwt:
-      issuer: sportcourt-auth
+      issuer: ${APP_SECURITY_JWT_ISSUER:https://auth.sportcourt.local}
       access-token-ttl-seconds: 3600
       refresh-token-ttl-seconds: 2592000
       refresh-token-reuse-revoke-all: true
-      # Dev default only. Replace via env APP_SECURITY_JWT_SECRET in real environments.
-      secret: change-this-dev-secret-to-a-long-random-value-32b
+      signing-key:
+        kid: ${APP_SECURITY_JWT_SIGNING_KID:sc-auth-rs256-v1}
+        private-key-location: ${APP_SECURITY_JWT_SIGNING_PRIVATE_KEY_LOCATION:classpath:keys/dev-rs256-private.pem}
+        public-key-location: ${APP_SECURITY_JWT_SIGNING_PUBLIC_KEY_LOCATION:classpath:keys/dev-rs256-public.pem}
+      previous-key:
+        kid: ${APP_SECURITY_JWT_PREVIOUS_KID:}
+        public-key-location: ${APP_SECURITY_JWT_PREVIOUS_PUBLIC_KEY_LOCATION:}

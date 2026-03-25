@@ -15,7 +15,7 @@
 
 ## Auth model (JWT)
 - Core service is configured as OAuth2 Resource Server (Bearer JWT).
-- Token is validated using HS256 secret from `app.security.jwt.secret`.
+- Token is validated via JWKS (`app.security.jwt.jwk-set-uri`) and issuer check (`app.security.jwt.issuer-uri`).
 - Role claim: `roles` (example: `["CUSTOMER"]`, `["ADMIN"]`, `["OWNER"]`).
 - Subject (`sub`) must be a UUID.
 

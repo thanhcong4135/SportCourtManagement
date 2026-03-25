@@ -34,12 +34,14 @@ Skip owner role scenario:
 powershell -ExecutionPolicy Bypass -File scripts/e2e-gateway-auth.ps1 -SkipOwnerScenario
 ```
 
-Use custom base URLs / JWT secret:
+Use custom base URLs / JWT signing config:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/e2e-gateway-auth.ps1 `
   -GatewayBaseUrl "http://localhost:8080" `
   -AuthBaseUrl "http://localhost:8082" `
   -CoreBaseUrl "http://localhost:8081" `
-  -JwtSecret "<your-dev-secret>"
+  -JwtIssuer "<your-issuer>" `
+  -JwtKid "<your-kid>" `
+  -JwtPrivateKeyPath "<path-to-rs256-private-key.pem>"
 ```

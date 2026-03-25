@@ -8,15 +8,16 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import reactor.core.publisher.Mono;
 
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -39,7 +40,7 @@ public class SecurityConfig {
                 .accessDeniedHandler(apiSecurityErrorHandler)
             )
             .authorizeExchange(exchanges -> exchanges
-                .pathMatchers("/actuator/health", "/actuator/info").permitAll()
+                .pathMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                 .pathMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout")
                 .permitAll()
                 .pathMatchers(HttpMethod.GET, "/api/core/venues/**", "/api/core/courts/**", "/api/core/availability/**")
@@ -66,9 +67,15 @@ public class SecurityConfig {
     }
 
     @Bean
-    ReactiveJwtDecoder jwtDecoder(@Value("${app.security.jwt.secret}") String secret) {
-        SecretKeySpec key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        return NimbusReactiveJwtDecoder.withSecretKey(key).build();
+    ReactiveJwtDecoder jwtDecoder(@Value("${app.security.jwt.jwk-set-uri}") String jwkSetUri,
+                                  @Value("${app.security.jwt.issuer-uri}") String issuerUri) {
+        NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
+            JwtValidators.createDefault(),
+            JwtValidators.createDefaultWithIssuer(issuerUri)
+        );
+        decoder.setJwtValidator(validator);
+        return decoder;
     }
 
     private Converter<Jwt, Mono<AbstractAuthenticationToken>> jwtAuthenticationConverter() {

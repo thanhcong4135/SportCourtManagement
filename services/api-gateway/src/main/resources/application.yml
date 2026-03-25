@@ -38,10 +38,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
 
 app:
   security:
     jwt:
-      # Dev default only. Replace via env APP_SECURITY_JWT_SECRET in real environments.
-      secret: change-this-dev-secret-to-a-long-random-value-32b
+      issuer-uri: ${APP_SECURITY_JWT_ISSUER:https://auth.sportcourt.local}
+      jwk-set-uri: ${APP_SECURITY_JWT_JWK_SET_URI:http://localhost:8082/.well-known/jwks.json}

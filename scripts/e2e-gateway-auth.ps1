@@ -2,7 +2,9 @@ param(
     [string]$GatewayBaseUrl = "http://localhost:8080",
     [string]$AuthBaseUrl = "http://localhost:8082",
     [string]$CoreBaseUrl = "http://localhost:8081",
-    [string]$JwtSecret = "change-this-dev-secret-to-a-long-random-value-32b",
+    [string]$JwtIssuer = "https://auth.sportcourt.local",
+    [string]$JwtKid = "sc-auth-rs256-v1",
+    [string]$JwtPrivateKeyPath = "services/auth-service/src/main/resources/keys/dev-rs256-private.pem",
     [switch]$SkipOwnerScenario
 )
 
@@ -15,19 +17,30 @@ function ConvertTo-Base64Url {
     return $raw.TrimEnd("=").Replace("+", "-").Replace("/", "_")
 }
 
-function New-Hs256Jwt {
+function New-Rs256Jwt {
     param(
         [string]$Subject,
         [string[]]$Roles,
-        [string]$Secret,
+        [string]$Issuer,
+        [string]$Kid,
+        [string]$PrivateKeyPath,
         [int]$ValidSeconds = 3600
     )
 
+    if (-not (Test-Path -LiteralPath $PrivateKeyPath)) {
+        throw "JWT private key not found at path: $PrivateKeyPath"
+    }
+
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $headerJson = '{"alg":"HS256","typ":"JWT"}'
+    $headerJson = @{
+        alg = "RS256"
+        typ = "JWT"
+        kid = $Kid
+    } | ConvertTo-Json -Compress
     $payloadJson = @{
         sub = $Subject
         roles = $Roles
+        iss = $Issuer
         iat = $now
         exp = $now + $ValidSeconds
     } | ConvertTo-Json -Compress
@@ -36,11 +49,29 @@ function New-Hs256Jwt {
     $payload = ConvertTo-Base64Url ([Text.Encoding]::UTF8.GetBytes($payloadJson))
     $unsigned = "$header.$payload"
 
-    $hmac = [System.Security.Cryptography.HMACSHA256]::new([Text.Encoding]::UTF8.GetBytes($Secret))
+    $pem = Get-Content -LiteralPath $PrivateKeyPath -Raw
+    $rsa = [System.Security.Cryptography.RSA]::Create()
     try {
-        $signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($unsigned))
+        if ($rsa.PSObject.Methods.Name -contains "ImportFromPem") {
+            $rsa.ImportFromPem($pem)
+        } else {
+            if ($env:OS -ne "Windows_NT") {
+                throw "Current PowerShell runtime does not support ImportFromPem and Windows CNG fallback is unavailable."
+            }
+            $base64 = ($pem -replace '-----BEGIN PRIVATE KEY-----', '' -replace '-----END PRIVATE KEY-----', '' -replace '\s', '')
+            $pkcs8Bytes = [Convert]::FromBase64String($base64)
+            $key = [System.Security.Cryptography.CngKey]::Import($pkcs8Bytes, [System.Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
+            $rsa.Dispose()
+            $rsa = [System.Security.Cryptography.RSACng]::new($key)
+        }
+
+        $signatureBytes = $rsa.SignData(
+            [Text.Encoding]::UTF8.GetBytes($unsigned),
+            [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+            [System.Security.Cryptography.RSASignaturePadding]::Pkcs1
+        )
     } finally {
-        $hmac.Dispose()
+        $rsa.Dispose()
     }
     $signature = ConvertTo-Base64Url $signatureBytes
     return "$unsigned.$signature"
@@ -125,10 +156,28 @@ function Assert-FailsWithStatus {
     }
 }
 
+function Assert-HealthEndpoint {
+    param(
+        [string]$Name,
+        [string]$BaseUrl
+    )
+
+    $healthUrl = "$BaseUrl/actuator/health"
+    Write-Host " - $Name => $healthUrl"
+    try {
+        $health = Invoke-JsonApi -Method GET -Url $healthUrl -Headers @{}
+        if ($null -eq $health -or [string]$health.status -ne "UP") {
+            throw "$Name health status is not UP"
+        }
+    } catch {
+        throw "Health check failed for $Name at $healthUrl. $($_.Exception.Message)"
+    }
+}
+
 Write-Host "Checking health endpoints..."
-$null = Invoke-JsonApi -Method GET -Url "$GatewayBaseUrl/actuator/health" -Headers @{}
-$null = Invoke-JsonApi -Method GET -Url "$AuthBaseUrl/actuator/health" -Headers @{}
-$null = Invoke-JsonApi -Method GET -Url "$CoreBaseUrl/actuator/health" -Headers @{}
+Assert-HealthEndpoint -Name "api-gateway" -BaseUrl $GatewayBaseUrl
+Assert-HealthEndpoint -Name "auth-service" -BaseUrl $AuthBaseUrl
+Assert-HealthEndpoint -Name "core-service" -BaseUrl $CoreBaseUrl
 
 $stamp = Get-Date -Format "yyyyMMddHHmmssfff"
 $email = "gateway.e2e.$stamp@test.local"
@@ -184,7 +233,7 @@ Assert-FailsWithStatus -ExpectedStatus 403 -Description "Customer call to POST /
 
 if (-not $SkipOwnerScenario) {
     Write-Host "Promoting user role via auth admin endpoint..."
-    $adminToken = New-Hs256Jwt -Subject ([Guid]::NewGuid().ToString()) -Roles @("ADMIN") -Secret $JwtSecret
+    $adminToken = New-Rs256Jwt -Subject ([Guid]::NewGuid().ToString()) -Roles @("ADMIN") -Issuer $JwtIssuer -Kid $JwtKid -PrivateKeyPath $JwtPrivateKeyPath
     $adminHeaders = @{ Authorization = "Bearer $adminToken" }
 
     $promoteResp = Invoke-JsonApi -Method PUT -Url "$GatewayBaseUrl/api/auth/admin/users/$($loginResp.userId)/roles" -Headers $adminHeaders -Body @{

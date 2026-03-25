@@ -9,13 +9,15 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -45,6 +47,7 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/actuator/health",
                     "/actuator/info",
+                    "/actuator/prometheus",
                     "/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html"
@@ -78,9 +81,15 @@ public class SecurityConfig {
 
     @Bean
     JwtDecoder jwtDecoder(
-        @org.springframework.beans.factory.annotation.Value("${app.security.jwt.secret}") String secret
+        @org.springframework.beans.factory.annotation.Value("${app.security.jwt.jwk-set-uri}") String jwkSetUri,
+        @org.springframework.beans.factory.annotation.Value("${app.security.jwt.issuer-uri}") String issuerUri
     ) {
-        SecretKeySpec key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(key).build();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
+            JwtValidators.createDefault(),
+            JwtValidators.createDefaultWithIssuer(issuerUri)
+        );
+        decoder.setJwtValidator(validator);
+        return decoder;
     }
 }

@@ -18,8 +18,14 @@ spring:
 app:
   security:
     jwt:
-      issuer: test-auth
+      issuer: https://test-auth.local
       access-token-ttl-seconds: 3600
       refresh-token-ttl-seconds: 86400
       refresh-token-reuse-revoke-all: true
-      secret: test-secret-key-for-jwt-signing-at-least-32-bytes
+      signing-key:
+        kid: test-rs256-kid
+        private-key-location: classpath:keys/dev-rs256-private.pem
+        public-key-location: classpath:keys/dev-rs256-public.pem
+      previous-key:
+        kid:
+        public-key-location:
