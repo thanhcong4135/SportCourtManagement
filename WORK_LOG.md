@@ -1168,3 +1168,19 @@ File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservice
 - File lien quan:
   - `.gitignore`
   - `WORK_LOG.md`
+
+### 2026-03-26 - Don 3 stash cu sau khi da doi chieu voi HEAD
+- Yeu cau: Kiem tra va don 3 stash con lai trong local repo.
+- Muc dich:
+  - Giam rac local state, tranh giu lai artifact/secret backup khong can thiet.
+- Hanh dong:
+  - Kiem tra danh sach stash (`git stash list`).
+  - Xoa lan luot 3 stash:
+    - `stash@{2}` -> `29704861f06b6fad098db27e4305237f6833bf16`
+    - `stash@{1}` -> `21aa24c500d2dc5921100536bfc15a91988dc10c`
+    - `stash@{0}` -> `a2c3cf0907982642539dd263112d860baf59f9d0`
+  - Kiem tra lai danh sach stash sau khi xoa.
+- Ket qua:
+  - `git stash list` hien tai rong (khong con stash).
+- File lien quan:
+  - `WORK_LOG.md`
