@@ -77,15 +77,24 @@ kafka:
       backoff-ms: 1000
     dlq:
       suffix: .dlq
+    payment-dlq:
+      enabled: true
+      group-id: core-service-payment-dlq
     audit:
       enabled: false
       group-id: core-service-audit
     payment:
       enabled: true
       group-id: core-service-payment
+  dlq:
+    replay:
+      max-attempts: 5
   topics:
     booking-events: booking.events
     payment-events: payment.events
+    sales-events: sales.events
+    booking-events-dlq: booking.events.dlq
+    payment-events-dlq: payment.events.dlq
 
 app:
   scheduling:

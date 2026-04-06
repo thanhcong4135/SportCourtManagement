@@ -11,6 +11,6 @@ public record BookingDraftItemRequest(
     @NotNull UUID courtId,
     @NotNull OffsetDateTime startTime,
     @NotNull OffsetDateTime endTime,
-    @NotNull @Positive BigDecimal priceTotal
+    @Positive BigDecimal priceTotal
 ) {
 }

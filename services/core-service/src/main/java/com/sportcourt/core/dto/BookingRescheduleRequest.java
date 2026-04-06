@@ -7,9 +7,8 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public record BookingDraftRequest(
-    @NotNull UUID courtId,
-    UUID customerId,
+public record BookingRescheduleRequest(
+    UUID courtId,
     @NotNull OffsetDateTime startTime,
     @NotNull OffsetDateTime endTime,
     @Positive BigDecimal priceTotal

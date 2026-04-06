@@ -9,6 +9,7 @@ import com.sportcourt.core.dto.BatchBookingDraftResponse;
 import com.sportcourt.core.dto.BatchConfirmRequest;
 import com.sportcourt.core.dto.BatchDepositRequest;
 import com.sportcourt.core.dto.BookingDraftRequest;
+import com.sportcourt.core.dto.BookingRescheduleRequest;
 import com.sportcourt.core.dto.BookingResponse;
 import com.sportcourt.core.dto.DepositPaymentRequest;
 import com.sportcourt.core.service.BookingService;
@@ -138,6 +139,15 @@ public class BookingController {
                                                @AuthenticationPrincipal Jwt jwt) {
         verifyCustomerOwnership(bookingService.getById(id), jwt);
         return ApiResponse.success(bookingService.cancel(id, idempotencyKey));
+    }
+
+    @PostMapping("/{id}/reschedule")
+    public ApiResponse<BookingResponse> reschedule(@PathVariable UUID id,
+                                                   @Valid @RequestBody BookingRescheduleRequest req,
+                                                   @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                                   @AuthenticationPrincipal Jwt jwt) {
+        verifyCustomerOwnership(bookingService.getById(id), jwt);
+        return ApiResponse.success(bookingService.reschedule(id, req, idempotencyKey));
     }
 
     private UUID resolveCustomerId(UUID requestedCustomerId, Jwt jwt) {

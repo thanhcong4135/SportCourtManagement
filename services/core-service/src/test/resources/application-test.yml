@@ -22,8 +22,12 @@ spring:
       auto-offset-reset: earliest
 
 kafka:
+  topics:
+    sales-events: sales.events
   consumer:
     payment:
+      enabled: false
+    payment-dlq:
       enabled: false
     audit:
       enabled: false

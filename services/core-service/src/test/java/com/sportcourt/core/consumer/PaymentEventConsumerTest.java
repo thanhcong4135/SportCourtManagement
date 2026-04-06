@@ -52,8 +52,8 @@ class PaymentEventConsumerTest {
             """;
 
         assertThatThrownBy(() -> consumer.consumePaymentEvent(payload, "payment.events", null))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("Failed to process payment event");
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported payment event schemaVersion");
 
         verifyNoInteractions(processor);
     }

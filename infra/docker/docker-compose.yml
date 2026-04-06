@@ -47,6 +47,38 @@ services:
       timeout: 3s
       retries: 20
 
+  mysql-notification:
+    image: mysql:8.4
+    container_name: sc-mysql-notification
+    environment:
+      MYSQL_DATABASE: notification_db
+      MYSQL_ROOT_PASSWORD: 123456
+    ports:
+      - "${MYSQL_NOTIFICATION_PORT:-3309}:3306"
+    volumes:
+      - mysql_notification_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p123456 --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mysql-reporting:
+    image: mysql:8.4
+    container_name: sc-mysql-reporting
+    environment:
+      MYSQL_DATABASE: reporting_db
+      MYSQL_ROOT_PASSWORD: 123456
+    ports:
+      - "${MYSQL_REPORTING_PORT:-3310}:3306"
+    volumes:
+      - mysql_reporting_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p123456 --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   redis:
     image: redis:7
     container_name: sc-redis
@@ -153,15 +185,35 @@ services:
     build:
       context: ../../services/notification-service
     container_name: sc-notification-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-notification:3306/notification_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 123456
+      KAFKA_BOOTSTRAP_SERVERS: sc-kafka:9092
     ports:
       - "8084:8084"
+    depends_on:
+      mysql-notification:
+        condition: service_healthy
+      kafka:
+        condition: service_started
 
   reporting-service:
     build:
       context: ../../services/reporting-service
     container_name: sc-reporting-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-reporting:3306/reporting_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 123456
+      KAFKA_BOOTSTRAP_SERVERS: sc-kafka:9092
     ports:
       - "8085:8085"
+    depends_on:
+      mysql-reporting:
+        condition: service_healthy
+      kafka:
+        condition: service_started
 
   chatbot-service:
     build:
@@ -222,6 +274,8 @@ volumes:
   mysql_core_data:
   mysql_payment_data:
   mysql_auth_data:
+  mysql_notification_data:
+  mysql_reporting_data:
   kafka_data:
   prometheus_data:
   grafana_data:

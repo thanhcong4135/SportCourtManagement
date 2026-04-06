@@ -35,6 +35,8 @@ public class PaymentEventConsumer {
             validateSchemaVersion(paymentEvent.getSchemaVersion());
             String eventId = resolveEventId(paymentEvent, headerEventId);
             paymentEventProcessor.process(paymentEvent, topic, eventId);
+        } catch (IllegalArgumentException ex) {
+            throw ex;
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to process payment event", ex);
         }

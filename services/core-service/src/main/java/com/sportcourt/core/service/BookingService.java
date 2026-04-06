@@ -5,6 +5,7 @@ import com.sportcourt.core.domain.BookingActionIdempotency;
 import com.sportcourt.core.domain.Court;
 import com.sportcourt.core.domain.enums.BookingActionType;
 import com.sportcourt.core.domain.enums.BookingStatus;
+import com.sportcourt.core.domain.enums.CustomerTier;
 import com.sportcourt.core.domain.enums.PaymentStatus;
 import com.sportcourt.core.api.PageResponse;
 import com.sportcourt.core.dto.BatchBookingActionResponse;
@@ -15,6 +16,7 @@ import com.sportcourt.core.dto.BatchDepositItemRequest;
 import com.sportcourt.core.dto.BatchDepositRequest;
 import com.sportcourt.core.dto.BookingDraftItemRequest;
 import com.sportcourt.core.dto.BookingDraftRequest;
+import com.sportcourt.core.dto.BookingRescheduleRequest;
 import com.sportcourt.core.dto.BookingResponse;
 import com.sportcourt.core.dto.DepositPaymentRequest;
 import com.sportcourt.core.event.PaymentEvent;
@@ -59,6 +61,7 @@ public class BookingService {
     private final BookingActionIdempotencyRepository bookingActionIdempotencyRepository;
     private final CourtRepository courtRepository;
     private final BookingOutboxService bookingOutboxService;
+    private final PricingService pricingService;
     private final ZoneId responseZoneId;
     private final boolean autoConfirmOnDepositSuccess;
 
@@ -66,12 +69,14 @@ public class BookingService {
                           BookingActionIdempotencyRepository bookingActionIdempotencyRepository,
                           CourtRepository courtRepository,
                           BookingOutboxService bookingOutboxService,
+                          PricingService pricingService,
                           @Value("${app.time.response-zone:Asia/Ho_Chi_Minh}") String responseZone,
                           @Value("${booking.payment.auto-confirm-on-deposit-success:true}") boolean autoConfirmOnDepositSuccess) {
         this.bookingRepository = bookingRepository;
         this.bookingActionIdempotencyRepository = bookingActionIdempotencyRepository;
         this.courtRepository = courtRepository;
         this.bookingOutboxService = bookingOutboxService;
+        this.pricingService = pricingService;
         this.responseZoneId = ZoneId.of(responseZone);
         this.autoConfirmOnDepositSuccess = autoConfirmOnDepositSuccess;
     }
@@ -293,6 +298,86 @@ public class BookingService {
     }
 
     @Transactional
+    public BookingResponse reschedule(UUID bookingId, BookingRescheduleRequest req, String idempotencyKey) {
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+
+        if (isTerminalStatus(booking.getStatus()) || booking.getStatus() == BookingStatus.IN_PROGRESS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking status cannot be rescheduled");
+        }
+
+        String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+        String requestFingerprint = fingerprintRescheduleRequest(req);
+        Booking replayBooking = resolveActionReplay(
+            booking,
+            BookingActionType.RESCHEDULE,
+            normalizedIdempotencyKey,
+            requestFingerprint
+        );
+        if (replayBooking != null) {
+            return toResponse(replayBooking);
+        }
+
+        UUID sourceCourtId = booking.getCourt().getId();
+        UUID targetCourtId = req.courtId() != null ? req.courtId() : sourceCourtId;
+        lockInvolvedCourts(sourceCourtId, targetCourtId);
+        Court targetCourt = sourceCourtId.equals(targetCourtId)
+            ? booking.getCourt()
+            : lockCourtForUpdate(targetCourtId);
+
+        if (!targetCourt.isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Court is inactive");
+        }
+
+        OffsetDateTime normalizedStart = normalizeToUtc(req.startTime());
+        OffsetDateTime normalizedEnd = normalizeToUtc(req.endTime());
+        validateTimeRange(normalizedStart, normalizedEnd);
+        validateSlotAlignment(normalizedStart, normalizedEnd);
+
+        boolean overlap = bookingRepository.existsOverlapExcluding(
+            targetCourtId,
+            normalizedStart,
+            normalizedEnd,
+            activeStatuses(),
+            booking.getId()
+        );
+        if (overlap) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Time slot not available");
+        }
+
+        BigDecimal fallbackPrice = req.priceTotal() != null ? req.priceTotal() : booking.getPriceTotal();
+        PricingQuoteResult quote = pricingService.quoteForBooking(
+            targetCourtId,
+            req.startTime(),
+            req.endTime(),
+            booking.getCustomerTier() != null ? booking.getCustomerTier() : CustomerTier.STANDARD,
+            fallbackPrice
+        );
+
+        BigDecimal newDepositRequired = calcDepositRequired(quote.totalPrice());
+        if ((booking.getPaymentStatus() == PaymentStatus.DEPOSITED || booking.getPaymentStatus() == PaymentStatus.PAID)
+            && booking.getDepositPaid().compareTo(newDepositRequired) < 0) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Deposit is not enough for the new slot price"
+            );
+        }
+
+        booking.setCourt(targetCourt);
+        booking.setStartTime(normalizedStart);
+        booking.setEndTime(normalizedEnd);
+        booking.setPriceTotal(quote.totalPrice());
+        booking.setDepositRequired(newDepositRequired);
+        booking.setCustomerTier(quote.customerTier());
+        booking.setPriceSnapshotJson(quote.snapshotJson());
+
+        Booking saved = bookingRepository.save(booking);
+        bookingOutboxService.enqueue(BookingEventType.BOOKING_RESCHEDULED, saved);
+        saveActionIdempotency(saved.getId(), BookingActionType.RESCHEDULE, normalizedIdempotencyKey, requestFingerprint);
+        return toResponse(saved);
+    }
+
+    @Transactional
     public BookingResponse applyPaymentEvent(PaymentEvent paymentEvent) {
         if (paymentEvent == null || paymentEvent.getBookingId() == null || paymentEvent.getType() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment event");
@@ -352,6 +437,16 @@ public class BookingService {
         return result;
     }
 
+    private void lockInvolvedCourts(UUID sourceCourtId, UUID targetCourtId) {
+        List<UUID> courtIds = List.of(sourceCourtId, targetCourtId).stream()
+            .distinct()
+            .sorted(Comparator.comparing(UUID::toString))
+            .toList();
+        for (UUID courtId : courtIds) {
+            lockCourtForUpdate(courtId);
+        }
+    }
+
     private Court lockCourtForUpdate(UUID courtId) {
         return courtRepository.findByIdForUpdate(courtId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Court not found"));
@@ -387,7 +482,7 @@ public class BookingService {
         boolean samePayload = existing.getCourt().getId().equals(req.courtId())
             && existing.getStartTime().equals(normalizedStart)
             && existing.getEndTime().equals(normalizedEnd)
-            && existing.getPriceTotal().compareTo(req.priceTotal()) == 0;
+            && (req.priceTotal() == null || existing.getPriceTotal().compareTo(req.priceTotal()) == 0);
         if (!samePayload) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key reused with different payload");
         }
@@ -428,6 +523,19 @@ public class BookingService {
 
     private String fingerprintDepositRequest(DepositPaymentRequest req) {
         return "amount:" + req.amount().stripTrailingZeros().toPlainString();
+    }
+
+    private String fingerprintRescheduleRequest(BookingRescheduleRequest req) {
+        OffsetDateTime normalizedStart = normalizeToUtc(req.startTime());
+        OffsetDateTime normalizedEnd = normalizeToUtc(req.endTime());
+        String targetCourt = req.courtId() == null ? "same-court" : req.courtId().toString();
+        String targetPrice = req.priceTotal() == null
+            ? "inherit"
+            : req.priceTotal().stripTrailingZeros().toPlainString();
+        return "court:" + targetCourt
+            + "|start:" + normalizedStart
+            + "|end:" + normalizedEnd
+            + "|price:" + targetPrice;
     }
 
     private void saveActionIdempotency(UUID bookingId,
@@ -473,6 +581,14 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Time slot not available");
         }
 
+        PricingQuoteResult quote = pricingService.quoteForBooking(
+            court.getId(),
+            startTime,
+            endTime,
+            CustomerTier.STANDARD,
+            priceTotal
+        );
+
         Booking booking = new Booking();
         booking.setCourt(court);
         booking.setCustomerId(customerId);
@@ -481,9 +597,11 @@ public class BookingService {
         booking.setPaymentStatus(PaymentStatus.UNPAID);
         booking.setStartTime(normalizedStart);
         booking.setEndTime(normalizedEnd);
-        booking.setPriceTotal(priceTotal);
-        booking.setDepositRequired(calcDepositRequired(priceTotal));
+        booking.setPriceTotal(quote.totalPrice());
+        booking.setDepositRequired(calcDepositRequired(quote.totalPrice()));
         booking.setDepositPaid(BigDecimal.ZERO);
+        booking.setCustomerTier(quote.customerTier());
+        booking.setPriceSnapshotJson(quote.snapshotJson());
         booking.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
 
         Booking saved = bookingRepository.save(booking);
@@ -601,6 +719,22 @@ public class BookingService {
 
         if (overlap) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Time slot not available");
+        }
+
+        if (booking.getCustomerTier() == null) {
+            booking.setCustomerTier(CustomerTier.STANDARD);
+        }
+        if (booking.getPriceSnapshotJson() == null || booking.getPriceSnapshotJson().isBlank()) {
+            PricingQuoteResult quote = pricingService.quoteForBooking(
+                booking.getCourt().getId(),
+                booking.getStartTime(),
+                booking.getEndTime(),
+                booking.getCustomerTier(),
+                booking.getPriceTotal()
+            );
+            booking.setPriceSnapshotJson(quote.snapshotJson());
+            booking.setPriceTotal(quote.totalPrice());
+            booking.setDepositRequired(calcDepositRequired(quote.totalPrice()));
         }
 
         booking.setStatus(BookingStatus.CONFIRMED);

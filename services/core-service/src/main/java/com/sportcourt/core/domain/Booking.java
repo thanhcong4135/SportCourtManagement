@@ -1,6 +1,7 @@
 package com.sportcourt.core.domain;
 
 import com.sportcourt.core.domain.enums.BookingStatus;
+import com.sportcourt.core.domain.enums.CustomerTier;
 import com.sportcourt.core.domain.enums.PaymentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -61,6 +62,13 @@ public class Booking {
 
     @Column(name = "deposit_paid", nullable = false, precision = 12, scale = 2)
     private BigDecimal depositPaid;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "customer_tier", nullable = false)
+    private CustomerTier customerTier;
+
+    @Column(name = "price_snapshot_json", columnDefinition = "TEXT")
+    private String priceSnapshotJson;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

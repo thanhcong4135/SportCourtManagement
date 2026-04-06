@@ -55,6 +55,9 @@ public class BookingOutboxService {
         event.setType(type);
         event.setBookingId(booking.getId());
         event.setCourtId(booking.getCourt() != null ? booking.getCourt().getId() : null);
+        event.setVenueId(booking.getCourt() != null && booking.getCourt().getVenue() != null
+            ? booking.getCourt().getVenue().getId()
+            : null);
         event.setCustomerId(booking.getCustomerId());
         event.setStatus(booking.getStatus());
         event.setPaymentStatus(booking.getPaymentStatus());

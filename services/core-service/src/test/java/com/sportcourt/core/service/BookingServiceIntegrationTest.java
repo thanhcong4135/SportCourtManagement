@@ -16,6 +16,7 @@ import com.sportcourt.core.dto.BatchDepositItemRequest;
 import com.sportcourt.core.dto.BatchDepositRequest;
 import com.sportcourt.core.dto.BookingDraftItemRequest;
 import com.sportcourt.core.dto.BookingDraftRequest;
+import com.sportcourt.core.dto.BookingRescheduleRequest;
 import com.sportcourt.core.dto.BookingResponse;
 import com.sportcourt.core.dto.CourtCreateRequest;
 import com.sportcourt.core.dto.DepositPaymentRequest;
@@ -459,6 +460,57 @@ class BookingServiceIntegrationTest {
         assertThat(replay.id()).isEqualTo(first.id());
         assertThat(replay.status()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(outboxEventRepository.count()).isEqualTo(3);
+    }
+
+    @Test
+    void reschedule_shouldMoveBookingToNewSlot() {
+        Court court = createCourt("Court-Reschedule");
+        BookingResponse draft = bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            UUID.randomUUID(),
+            time(2026, 3, 26, 8, 0),
+            time(2026, 3, 26, 10, 0),
+            money("300000")
+        ));
+
+        BookingResponse updated = bookingService.reschedule(
+            draft.id(),
+            new BookingRescheduleRequest(
+                null,
+                time(2026, 3, 26, 10, 0),
+                time(2026, 3, 26, 12, 0),
+                money("320000")
+            ),
+            "reschedule-key-001"
+        );
+
+        assertThat(updated.startTime()).isEqualTo(time(2026, 3, 26, 10, 0));
+        assertThat(updated.endTime()).isEqualTo(time(2026, 3, 26, 12, 0));
+        assertThat(updated.status()).isEqualTo(BookingStatus.DRAFT);
+    }
+
+    @Test
+    void reschedule_withSameIdempotencyKey_shouldReturnSameResult() {
+        Court court = createCourt("Court-Reschedule-Idempotency");
+        BookingResponse draft = bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            UUID.randomUUID(),
+            time(2026, 3, 27, 8, 0),
+            time(2026, 3, 27, 10, 0),
+            money("300000")
+        ));
+
+        BookingRescheduleRequest request = new BookingRescheduleRequest(
+            null,
+            time(2026, 3, 27, 10, 0),
+            time(2026, 3, 27, 12, 0),
+            money("300000")
+        );
+        BookingResponse first = bookingService.reschedule(draft.id(), request, "reschedule-key-002");
+        BookingResponse replay = bookingService.reschedule(draft.id(), request, "reschedule-key-002");
+
+        assertThat(replay.id()).isEqualTo(first.id());
+        assertThat(replay.startTime()).isEqualTo(first.startTime());
     }
 
     @Test

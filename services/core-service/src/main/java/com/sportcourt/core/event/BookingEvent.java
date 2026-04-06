@@ -17,6 +17,7 @@ public class BookingEvent {
     private BookingEventType type;
     private UUID bookingId;
     private UUID courtId;
+    private UUID venueId;
     private UUID customerId;
     private BookingStatus status;
     private PaymentStatus paymentStatus;

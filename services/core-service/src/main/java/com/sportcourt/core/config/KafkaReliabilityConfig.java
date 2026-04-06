@@ -31,7 +31,9 @@ public class KafkaReliabilityConfig {
                 new TopicPartition(record.topic() + dlqSuffix, record.partition())
         );
         FixedBackOff backOff = new FixedBackOff(backoffMs, Math.max(0, maxAttempts - 1));
-        return new DefaultErrorHandler(recoverer, backOff);
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
+        errorHandler.addNotRetryableExceptions(IllegalArgumentException.class);
+        return errorHandler;
     }
 
     @Bean

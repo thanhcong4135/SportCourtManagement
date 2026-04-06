@@ -48,6 +48,8 @@ public class SecurityConfig {
                 .pathMatchers(HttpMethod.POST, "/api/payments/callback").permitAll()
                 .pathMatchers(HttpMethod.POST, "/api/core/venues/**", "/api/core/courts/**")
                 .hasAnyRole("ADMIN", "OWNER")
+                .pathMatchers("/api/core/ops/**", "/api/payments/ops/**")
+                .hasRole("ADMIN")
                 .pathMatchers("/api/core/bookings/**")
                 .hasAnyRole("CUSTOMER", "OWNER", "ADMIN")
                 .pathMatchers(HttpMethod.POST, "/api/payments/deposits/initiate")
