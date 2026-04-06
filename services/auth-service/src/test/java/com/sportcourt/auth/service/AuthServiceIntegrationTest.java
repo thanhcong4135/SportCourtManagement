@@ -3,6 +3,7 @@ package com.sportcourt.auth.service;
 import com.sportcourt.auth.domain.Role;
 import com.sportcourt.auth.domain.enums.RoleName;
 import com.sportcourt.auth.domain.enums.UserStatus;
+import com.sportcourt.auth.dto.AdminUserResponse;
 import com.sportcourt.auth.dto.AuthTokenResponse;
 import com.sportcourt.auth.dto.LoginRequest;
 import com.sportcourt.auth.dto.MeResponse;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -166,6 +168,33 @@ class AuthServiceIntegrationTest {
 
         TokenRevokeResponse result = authService.logoutAll(token.userId());
         assertThat(result.revokedCount()).isGreaterThan(0);
+    }
+
+    @Test
+    void admin_shouldGetUserById() {
+        AuthTokenResponse token = authService.register(new RegisterRequest("u8@test.com", "strongPass123", "U8"));
+
+        AdminUserResponse user = authService.getUser(token.userId());
+
+        assertThat(user.userId()).isEqualTo(token.userId());
+        assertThat(user.email()).isEqualTo("u8@test.com");
+        assertThat(user.roles()).contains("ROLE_CUSTOMER");
+    }
+
+    @Test
+    void admin_shouldListUsersWithFilters() {
+        AuthTokenResponse u9 = authService.register(new RegisterRequest("owner9@test.com", "strongPass123", "Owner Nine"));
+        authService.register(new RegisterRequest("customer10@test.com", "strongPass123", "Customer Ten"));
+
+        authService.updateUserRoles(
+            u9.userId(),
+            new UpdateUserRolesRequest(java.util.List.of(RoleName.ROLE_OWNER, RoleName.ROLE_STAFF))
+        );
+
+        var ownerPage = authService.listUsers("owner9", null, RoleName.ROLE_OWNER, PageRequest.of(0, 10));
+
+        assertThat(ownerPage.getTotalElements()).isEqualTo(1);
+        assertThat(ownerPage.getContent().get(0).email()).isEqualTo("owner9@test.com");
     }
 
     private void seedRoles() {

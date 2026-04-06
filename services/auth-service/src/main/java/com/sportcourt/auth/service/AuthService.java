@@ -17,7 +17,11 @@ import com.sportcourt.auth.dto.UpdateUserStatusRequest;
 import com.sportcourt.auth.repository.RefreshTokenRepository;
 import com.sportcourt.auth.repository.RoleRepository;
 import com.sportcourt.auth.repository.UserAccountRepository;
+import jakarta.persistence.criteria.JoinType;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -145,6 +149,39 @@ public class AuthService {
     @Transactional
     public TokenRevokeResponse logoutAllBySubject(String subject) {
         return logoutAll(parseUserId(subject));
+    }
+
+    @Transactional(readOnly = true)
+    public AdminUserResponse getUser(UUID userId) {
+        UserAccount user = userAccountRepository.findById(userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return toAdminUserResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminUserResponse> listUsers(String query, UserStatus status, RoleName role, Pageable pageable) {
+        Specification<UserAccount> spec = Specification.where(null);
+
+        if (query != null && !query.trim().isEmpty()) {
+            String likeQuery = "%" + query.trim().toLowerCase() + "%";
+            spec = spec.and((root, cq, cb) -> cb.or(
+                cb.like(cb.lower(root.get("email")), likeQuery),
+                cb.like(cb.lower(root.get("displayName")), likeQuery)
+            ));
+        }
+
+        if (status != null) {
+            spec = spec.and((root, cq, cb) -> cb.equal(root.get("status"), status));
+        }
+
+        if (role != null) {
+            spec = spec.and((root, cq, cb) -> {
+                cq.distinct(true);
+                return cb.equal(root.join("roles", JoinType.LEFT).get("name"), role);
+            });
+        }
+
+        return userAccountRepository.findAll(spec, pageable).map(this::toAdminUserResponse);
     }
 
     @Transactional
