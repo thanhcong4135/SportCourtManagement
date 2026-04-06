@@ -1,4 +1,4 @@
-# WORK LOG (User + Codex)
+﻿# WORK LOG (User + Codex)
 
 File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservices_v3.pdf`.
 
@@ -1184,3 +1184,597 @@ File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservice
   - `git stash list` hien tai rong (khong con stash).
 - File lien quan:
   - `WORK_LOG.md`
+
+### 2026-03-26 - Step 3: Retry/DLQ replay policy end-to-end (core-service + payment-service)
+- Yeu cau: "thuc hien buoc 3: Retry/DLQ replay policy end-to-end".
+- Muc dich:
+  - Chot policy xu ly loi consumer theo huong van hanh duoc: retry -> DLQ -> parking lot -> replay co kiem soat.
+  - Co endpoint ops de replay lai message loi thay vi replay thu cong bang tool ngoai.
+- Hanh dong:
+  - Core-service:
+    - Them DLQ parking lot model + service:
+      - `DeadLetterEvent`, `DeadLetterEventStatus`, `DeadLetterEventRepository`, `DeadLetterEventService`
+      - migration `V8__dead_letter_event.sql`
+    - Them DLQ consumer:
+      - `PaymentEventDlqConsumer` consume `payment.events.dlq` va luu vao `dead_letter_event`.
+    - Them ops API:
+      - `GET /api/core/ops/dlq`
+      - `POST /api/core/ops/dlq/{id}/replay`
+    - Hardening security:
+      - `/api/core/ops/**` chi cho role `ADMIN`.
+  - Payment-service:
+    - Them DLQ parking lot model + service:
+      - `DeadLetterEvent`, `DeadLetterEventStatus`, `DeadLetterEventRepository`, `DeadLetterEventService`
+      - migration `V4__dead_letter_event.sql`
+    - Them DLQ consumer:
+      - `BookingEventDlqConsumer` consume `booking.events.dlq` va luu vao `dead_letter_event`.
+    - Them ops API:
+      - `GET /api/payments/ops/dlq`
+      - `POST /api/payments/ops/dlq/{id}/replay`
+    - Hardening security:
+      - `/api/payments/ops/**` chi cho role `ADMIN`.
+  - Retry policy hardening:
+    - `DefaultErrorHandler` cho core/payment them `addNotRetryableExceptions(IllegalArgumentException.class)`.
+    - Consumer validation errors (schema version) giu nguyen `IllegalArgumentException` de day vao DLQ nhanh hon, khong retry vo ich.
+  - Gateway policy sync:
+    - Cap nhat `api-gateway` de `/api/core/ops/**` va `/api/payments/ops/**` chi role `ADMIN`.
+  - Bo sung test:
+    - core:
+      - `core/dlq/DeadLetterEventServiceTest`
+      - `core/consumer/PaymentEventDlqConsumerTest`
+      - cap nhat `PaymentEventConsumerTest` cho non-retryable schema error.
+    - payment:
+      - `payment/dlq/DeadLetterEventServiceTest`
+      - `payment/consumer/BookingEventDlqConsumerTest`
+      - cap nhat `BookingEventConsumerTest` cho non-retryable schema error.
+  - Bo sung tai lieu:
+    - `docs/backend-step8-retry-dlq-replay.md`.
+- Verify:
+  - `services/core-service`:
+    - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=DeadLetterEventServiceTest,PaymentEventDlqConsumerTest,PaymentEventConsumerTest" test -q` => pass.
+  - `services/payment-service`:
+    - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=DeadLetterEventServiceTest,BookingEventDlqConsumerTest,BookingEventConsumerTest" test -q` => pass.
+  - `services/api-gateway`:
+    - `mvn "-Dmaven.repo.local=.m2repo" test-compile -q` => pass.
+- File anh huong:
+  - `services/core-service/src/main/java/com/sportcourt/core/config/KafkaReliabilityConfig.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/SecurityConfig.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/consumer/PaymentEventConsumer.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/consumer/PaymentEventDlqConsumer.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/controller/DlqOpsController.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dlq/DeadLetterEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dlq/DeadLetterEventRepository.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dlq/DeadLetterEventService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dlq/DeadLetterEventStatus.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/DeadLetterEventResponse.java`
+  - `services/core-service/src/main/resources/application.yml`
+  - `services/core-service/src/main/resources/db/migration/V8__dead_letter_event.sql`
+  - `services/core-service/src/test/java/com/sportcourt/core/consumer/PaymentEventConsumerTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/consumer/PaymentEventDlqConsumerTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/dlq/DeadLetterEventServiceTest.java`
+  - `services/core-service/src/test/resources/application-test.yml`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/config/KafkaConfig.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/config/SecurityConfig.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/consumer/BookingEventConsumer.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/consumer/BookingEventDlqConsumer.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/controller/DlqOpsController.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/dlq/DeadLetterEvent.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/dlq/DeadLetterEventRepository.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/dlq/DeadLetterEventService.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/dlq/DeadLetterEventStatus.java`
+  - `services/payment-service/src/main/java/com/sportcourt/payment/dto/DeadLetterEventResponse.java`
+  - `services/payment-service/src/main/resources/application.yml`
+  - `services/payment-service/src/main/resources/db/migration/V4__dead_letter_event.sql`
+  - `services/payment-service/src/test/java/com/sportcourt/payment/consumer/BookingEventConsumerTest.java`
+  - `services/payment-service/src/test/java/com/sportcourt/payment/consumer/BookingEventDlqConsumerTest.java`
+  - `services/payment-service/src/test/java/com/sportcourt/payment/dlq/DeadLetterEventServiceTest.java`
+  - `services/payment-service/src/test/resources/application-test.yml`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/SecurityConfig.java`
+  - `docs/backend-step8-retry-dlq-replay.md`
+  - `WORK_LOG.md`
+
+### 2026-03-29 - Tao checklist sprint backend theo thu tu uu tien
+- Yeu cau: Tao 1 file checklist sprint theo uu tien quan trong + best practice, chua thuc thi ngay.
+- Muc dich:
+  - Co roadmap task ro rang de implement lan luot, tranh lam dan trai.
+  - Chot thu tu uu tien P0/P1 cho backend.
+- Hanh dong:
+  - Tao file `docs/backend-sprint-checklist.md`.
+  - Noi dung gom 5 sprint theo thu tu:
+    1. Notification reliability (P0)
+    2. Pricing + Sales + Reschedule (P0)
+    3. Reporting read model that (P1)
+    4. Chatbot nghiep vu that (P1)
+    5. Platform hardening (P1)
+  - Moi sprint co checklist + Definition of Done + cross-sprint best practices.
+- File anh huong:
+  - `docs/backend-sprint-checklist.md`
+  - `WORK_LOG.md`
+- Ghi chu:
+  - Day la plan/checklist, chua bat dau implement.
+
+### 2026-03-29 - Sprint 1 implementation: Notification reliability (event-driven)
+- Yeu cau: Thuc hien Sprint 1 ngay (khong can tach task).
+- Muc dich:
+  - Chuyen `notification-service` tu mock memory sang luong reliable:
+    event -> queue DB -> worker dispatch -> retry/backoff -> failed bucket.
+- Hanh dong:
+  - Persistence + migration:
+    - Them `notification_message` table (Flyway `V1__init.sql`).
+    - Them entity `NotificationMessage`, enum `NotificationStatus`, repository co query lock batch dispatch.
+  - Event-driven consume:
+    - Them consumer `BookingEventConsumer`, `PaymentEventConsumer`.
+    - Them `NotificationEventFactory` map event -> notification command.
+    - Them idempotency queue theo unique key event.
+  - Dispatcher reliability:
+    - Them `NotificationDispatchScheduler` + service dispatch.
+    - Retry policy exponential backoff.
+    - Vuot max attempt => `status=FAILED` (dead-letter bucket noi bo).
+  - API bo sung:
+    - `GET /api/notifications` (filter bookingId/customerId/status, pageable).
+    - `POST /api/notifications/{id}/retry` cho record FAILED.
+  - Monitoring:
+    - Them metrics: sent/retry/failed + gauge pending/failed.
+  - Kafka reliability:
+    - Them `KafkaReliabilityConfig` (retry + DLQ suffix + non-retryable IllegalArgumentException).
+  - Infra:
+    - Docker compose them `mysql-notification`.
+    - Notification container su dung datasource + kafka env vars.
+  - Test:
+    - Them `NotificationServiceIntegrationTest`.
+    - Them `BookingEventConsumerTest`, `PaymentEventConsumerTest`.
+    - Cap nhat `NotificationServiceApplicationTests` dung profile test.
+    - Them `application-test.yml` (H2 + disable scheduler/kafka consumers).
+  - Docs:
+    - Them `docs/notification-service-sprint1.md`.
+- Verify:
+  - `services/notification-service`: `mvn "-Dmaven.repo.local=.m2repo" test -q` => pass.
+  - `docker compose --env-file .env -f infra/docker/docker-compose.yml config` => pass.
+- File anh huong:
+  - `services/notification-service/pom.xml`
+  - `services/notification-service/src/main/resources/application.yml`
+  - `services/notification-service/src/main/resources/db/migration/V1__init.sql`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/NotificationServiceApplication.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/config/KafkaReliabilityConfig.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/controller/NotificationController.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/domain/NotificationMessage.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/domain/enums/NotificationStatus.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/repository/NotificationMessageRepository.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/service/NotificationService.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/service/NotificationSender.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/service/MockNotificationSender.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/service/NotificationEventFactory.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/service/NotificationEventCommand.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/consumer/BookingEventConsumer.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/consumer/PaymentEventConsumer.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/scheduler/NotificationDispatchScheduler.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/monitoring/NotificationMetrics.java`
+  - `services/notification-service/src/main/java/com/sportcourt/notification/dto/NotificationResponse.java`
+  - `services/notification-service/src/test/resources/application-test.yml`
+  - `services/notification-service/src/test/java/com/sportcourt/notification/NotificationServiceApplicationTests.java`
+  - `services/notification-service/src/test/java/com/sportcourt/notification/service/NotificationServiceIntegrationTest.java`
+  - `services/notification-service/src/test/java/com/sportcourt/notification/consumer/BookingEventConsumerTest.java`
+  - `services/notification-service/src/test/java/com/sportcourt/notification/consumer/PaymentEventConsumerTest.java`
+  - `infra/docker/docker-compose.yml`
+  - `docs/notification-service-sprint1.md`
+  - `WORK_LOG.md`
+
+### 2026-03-29 - Chot trang thai Sprint 1 va verify lai
+- Yeu cau: "ko can tach, thuc hien sprint 1".
+- Muc dich:
+  - Chot lai checklist Sprint 1 theo dung trang thai da implement.
+  - Verify nhanh de dam bao Sprint 1 su dung duoc.
+- Hanh dong:
+  - Cap nhat `docs/backend-sprint-checklist.md`:
+    - doi status tu planned-only sang Sprint 1 da implement.
+    - danh dau [x] toan bo checklist + DoD cua Sprint 1.
+  - Chay verify:
+    - `services/notification-service`: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=NotificationServiceIntegrationTest,BookingEventConsumerTest,PaymentEventConsumerTest" test -q` => pass.
+    - `docker compose --env-file .env -f infra/docker/docker-compose.yml config` => pass.
+- File anh huong:
+  - `docs/backend-sprint-checklist.md`
+  - `WORK_LOG.md`
+
+### 2026-03-29 - Sprint 2 phase 1: Pricing rules + quote + booking reschedule
+- Yeu cau: "bat dau buoc 2".
+- Muc dich:
+  - Bat dau Sprint 2 theo P0, uu tien pricing/rule engine va reschedule an toan truoc.
+  - Giu flow booking hien tai, bo sung quote server-side + pricing snapshot.
+- Hanh dong:
+  - Them pricing domain + migration:
+    - enum: `CustomerTier`, `PricingDayType`, `PricingRuleCustomerTier`.
+    - entity/repo: `PricingRule`, `PricingRuleRepository`.
+    - migration `V9__pricing_rule_and_booking_snapshot.sql`:
+      - table `pricing_rule`
+      - booking columns: `customer_tier`, `price_snapshot_json`.
+  - Them pricing service + API:
+    - `PricingService` tinh quote theo slot 30p, day-type, customer-tier, priority.
+    - fallback manual price khi booking draft chua co pricing-rule.
+    - API:
+      - `POST /api/core/pricing-rules`
+      - `GET /api/core/pricing-rules`
+      - `GET /api/core/pricing/quote`
+  - Tich hop vao booking:
+    - `createDraft` su dung `PricingService.quoteForBooking`.
+    - luu `customerTier` + `priceSnapshotJson`.
+    - bo sung `reschedule` voi overlap check + idempotency action `RESCHEDULE`.
+    - endpoint `POST /api/core/bookings/{id}/reschedule`.
+    - event moi: `BOOKING_RESCHEDULED`.
+  - Security:
+    - mo GET pricing endpoints.
+    - gioi han POST pricing-rules cho OWNER/ADMIN.
+  - Test:
+    - them `PricingServiceIntegrationTest`.
+    - them test reschedule vao `BookingServiceIntegrationTest`.
+  - Checklist:
+    - cap nhat `docs/backend-sprint-checklist.md` danh dau cac muc Sprint 2 da xong trong phase 1.
+- Verify:
+  - `services/core-service`: `mvn "-Dmaven.repo.local=.m2repo" test -q` => pass.
+- File anh huong:
+  - `services/core-service/src/main/resources/db/migration/V9__pricing_rule_and_booking_snapshot.sql`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/Booking.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/PricingRule.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/enums/CustomerTier.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/enums/PricingDayType.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/enums/PricingRuleCustomerTier.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/repository/PricingRuleRepository.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/PricingService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/PricingQuoteResult.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/PricingQuoteSlot.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/controller/PricingController.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/controller/BookingController.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/SecurityConfig.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/BookingService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/enums/BookingActionType.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingEventType.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/PricingRuleCreateRequest.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/PricingRuleResponse.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/PricingQuoteResponse.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/PricingQuoteSlotResponse.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/BookingRescheduleRequest.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/BookingDraftRequest.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/BookingDraftItemRequest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/PricingServiceIntegrationTest.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/BookingServiceIntegrationTest.java`
+  - `docs/backend-sprint-checklist.md`
+  - `WORK_LOG.md`
+
+### 2026-03-29 - Sprint 2 phase 2: Products/Orders add-on + attach bookingId
+- Yeu cau: tiep tuc buoc 2 sau khi da xong pricing/reschedule.
+- Muc dich:
+  - Hoan thanh phan con lai cua Sprint 2: add-on sales co lien ket booking.
+  - Tao duoc luong doanh thu phu truy vet theo booking/venue/customer.
+- Hanh dong:
+  - Them schema + domain:
+    - migration `V10__product_and_sales_order.sql`.
+    - entities: `Product`, `SalesOrder`, `SalesOrderItem`, enum `SalesOrderStatus`.
+    - repositories: `ProductRepository`, `SalesOrderRepository`.
+  - Them service:
+    - `ProductService`: tao/list san pham add-on.
+    - `SalesOrderService`: tao/list don hang add-on, validate:
+      - duplicate product trong request,
+      - product active,
+      - product thuoc dung venue,
+      - attach bookingId thi venue/customer phai nhat quan.
+  - Them API:
+    - `POST /api/core/products`
+    - `GET /api/core/products`
+    - `POST /api/core/orders`
+    - `GET /api/core/orders`
+  - Security:
+    - GET products permitAll.
+    - POST products cho OWNER/ADMIN.
+    - orders cho CUSTOMER/OWNER/ADMIN.
+  - Test integration:
+    - `ProductAndSalesOrderIntegrationTest`:
+      - create/list product
+      - create order attach bookingId + tinh tong tien
+      - list order theo bookingId
+  - Checklist:
+    - danh dau xong module Products/Orders + Definition of Done Sprint 2.
+- Verify:
+  - `services/core-service`: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=ProductAndSalesOrderIntegrationTest,PricingServiceIntegrationTest,BookingServiceIntegrationTest" test -q` => pass.
+- File anh huong:
+  - `services/core-service/src/main/resources/db/migration/V10__product_and_sales_order.sql`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/Product.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/SalesOrder.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/SalesOrderItem.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/domain/enums/SalesOrderStatus.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/repository/ProductRepository.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/repository/SalesOrderRepository.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/ProductService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/SalesOrderService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/controller/ProductController.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/controller/SalesOrderController.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/config/SecurityConfig.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/ProductCreateRequest.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/ProductResponse.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/SalesOrderCreateRequest.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/SalesOrderItemRequest.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/SalesOrderResponse.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/dto/SalesOrderItemResponse.java`
+  - `services/core-service/src/test/java/com/sportcourt/core/service/ProductAndSalesOrderIntegrationTest.java`
+  - `docs/backend-sprint-checklist.md`
+  - `WORK_LOG.md`
+
+### 2026-03-29 - Restart core-service va test E2E products/orders
+- Yeu cau: restart `core-service` va test E2E products/orders.
+- Muc dich:
+  - Xac nhan `core-service` chay voi schema moi (Flyway V9, V10).
+  - Verify API add-on products/orders hoat dong thong suot voi auth.
+- Hanh dong:
+  - Khoi dong lai stack lien quan:
+    - `docker compose --env-file .env -f infra/docker/docker-compose.yml up -d --build mysql-core mysql-auth auth-service core-service`
+  - Xu ly su co startup:
+    - `core-service` bi stop do thieu Kafka bootstrap (`sc-kafka:9092`).
+    - Khoi dong bo sung Kafka va start lai core:
+      - `docker compose --env-file .env -f infra/docker/docker-compose.yml up -d kafka core-service`
+  - Chay E2E script thu cong:
+    1. register user auth-service
+    2. gan them role OWNER cho user (SQL vao `mysql-auth`)
+    3. login lai lay access token (roles: CUSTOMER, OWNER)
+    4. tao venue + court
+    5. tao 2 product
+    6. tao booking draft
+    7. tao sales order attach `bookingId`
+    8. query list products theo venue
+    9. query list orders theo booking
+- Ket qua:
+  - `core-service` restart thanh cong.
+  - E2E pass:
+    - `productsFound = 2`
+    - `ordersFoundByBooking = 1`
+    - `orderTotal = 45000.00`
+  - IDs mau:
+    - `bookingId = bde72a09-8ddc-4223-bcf4-36a1f053a571`
+    - `orderId = 93f52a87-9a65-4514-9a06-629c4ff2901d`
+- File anh huong:
+  - `WORK_LOG.md`
+
+### 2026-03-29 - Verify Sprint 2 va bat dau Sprint 3 (reporting read model)
+- Yeu cau: check Sprint 2 con thieu test gi khong; neu khong thi start Sprint 3.
+- Muc dich:
+  - Dong sprint 2 bang test gate ro rang.
+  - Khoi dong sprint 3 voi read model reporting dung du lieu that.
+- Hanh dong:
+  - Verify test Sprint 2 (core-service):
+    - `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PricingServiceIntegrationTest,ProductAndSalesOrderIntegrationTest,BookingServiceIntegrationTest" test -q`
+    - Ket qua: pass.
+  - Khoi tao/hoan thien Sprint 3 (reporting-service):
+    - Them domain + repository + projection service cho:
+      - `booking_read_model`
+      - `sales_order_read_model`
+      - `projected_event` (idempotency projection).
+    - Them consumer:
+      - `booking.events`
+      - `payment.events`
+      - `sales.events`
+    - Chuyen `ReportService` tu mock sang aggregate that (occupancy/revenue/best-hours) + pagination/sort.
+    - Them endpoint rebuild projection:
+      - `POST /api/reports/projection/reset`
+    - Them integration test cho idempotency + reconciliation.
+  - Fix loi build/test Sprint 3:
+    - Bo sung `lombok` vao `services/reporting-service/pom.xml`.
+    - Xu ly map `venueId` tu native query (UUID/byte[]/String) trong `ReportService`.
+    - Dieu chinh doanh thu add-on su dung `last_occurred_at` thay vi `updated_at` de aggregate theo event time.
+  - Verify test Sprint 3 (reporting-service):
+    - `mvn "-Dmaven.repo.local=.m2repo" test -q`
+    - Ket qua: pass.
+- File anh huong:
+  - `docs/backend-sprint-checklist.md`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/BookingOutboxService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/SalesEvent.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/SalesEventType.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/event/SalesOutboxService.java`
+  - `services/core-service/src/main/java/com/sportcourt/core/service/SalesOrderService.java`
+  - `services/core-service/src/main/resources/application.yml`
+  - `services/core-service/src/test/resources/application-test.yml`
+  - `services/reporting-service/pom.xml`
+  - `services/reporting-service/src/main/resources/application.yml`
+  - `services/reporting-service/src/main/resources/db/migration/V1__init_reporting_read_model.sql`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/domain/ProjectedEvent.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/domain/BookingReadModel.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/domain/SalesOrderReadModel.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/repository/ProjectedEventRepository.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/repository/BookingReadModelRepository.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/repository/SalesOrderReadModelRepository.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/repository/projection/DailyBookingAggregateProjection.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/repository/projection/DailyRevenueAggregateProjection.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/repository/projection/DailyAddOnRevenueProjection.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/repository/projection/BestHourProjection.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/service/ProjectionEventService.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/service/BookingProjectionService.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/service/SalesProjectionService.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/service/ReportService.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/controller/ReportingController.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/consumer/BookingEventConsumer.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/consumer/PaymentEventConsumer.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/consumer/SalesEventConsumer.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/dto/ReportPageResponse.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/dto/OccupancyReportRowResponse.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/dto/RevenueReportRowResponse.java`
+  - `services/reporting-service/src/main/java/com/sportcourt/reporting/dto/BestHourReportRowResponse.java`
+  - `services/reporting-service/src/test/resources/application-test.yml`
+  - `services/reporting-service/src/test/java/com/sportcourt/reporting/ReportingServiceApplicationTests.java`
+  - `services/reporting-service/src/test/java/com/sportcourt/reporting/service/ReportServiceIntegrationTest.java`
+  - `infra/docker/docker-compose.yml`
+  - `.env`
+  - `WORK_LOG.md`
+
+### 2026-03-30 - Smoke test Sprint 3 (core/payment/reporting E2E)
+- Yeu cau: user dong y chay smoke test API report de chot Sprint 3.
+- Muc dich:
+  - Xac nhan projection booking/payment/sales chay that tren Docker stack.
+  - Verify 3 API report (`occupancy`, `revenue`, `best-hours`) tra du lieu that.
+- Hanh dong:
+  - Khoi dong stack lien quan:
+    - `docker compose --env-file .env -f infra/docker/docker-compose.yml up -d --build mysql-core mysql-payment mysql-auth mysql-reporting kafka core-service payment-service auth-service reporting-service`
+  - Verify health:
+    - `core-service` (8081): UP
+    - `auth-service` (8082): UP
+    - `payment-service` (8083): UP
+    - `reporting-service` (8085): UP
+  - Chay E2E core-payment:
+    - `powershell -ExecutionPolicy Bypass -File scripts/e2e-core-payment.ps1`
+    - Ket qua: booking duoc confirm + deposited qua callback payment.
+  - Tao them sales order (add-on) de kick `sales.events`, sau do query report endpoints.
+- Ket qua:
+  - `bookingId = f1b8050a-fb4b-40ce-8c8b-6bc67daaccb1`
+  - `orderId = c0ceab88-ff36-4c5b-ae2b-5248df18cdd7`
+  - `venueId = 2573fcf2-fe27-4e32-aa6e-a6675f103e1a`
+  - `orderTotal = 50000.00`
+  - Report API:
+    - `occupancyRows = 1`
+    - `revenueRows = 1`
+    - `addOnRevenue = 50000.00` (khop voi orderTotal)
+    - `bestHourRows = 1`
+  - Danh gia: smoke test Sprint 3 PASS.
+- File anh huong:
+  - `WORK_LOG.md`
+
+
+### 2026-03-31 - Bat dau frontend theo Alobo_UI_Flow.pdf
+- Yeu cau: dua theo file `C:\Users\ADMIN\Downloads\Alobo_UI_Flow.pdf` de lam frontend cho du an.
+- Muc dich:
+  - Khoi tao frontend MVP cho 2 nhom giao dien: khach hang va van hanh noi bo.
+  - Bám flow chinh: discover -> availability/quote -> booking -> deposit/confirm -> add-on -> report.
+- Hanh dong:
+  - Tao project `frontend/` bang Vite + React + TypeScript.
+  - Them router va auth context (login/register/logout voi `auth-service` qua gateway).
+  - Xay 3 route:
+    - `/` landing
+    - `/customer` customer portal
+    - `/ops` operations portal
+  - Customer portal:
+    - list venues/courts, check availability, quote gia, tao booking draft,
+    - dat coc + confirm booking,
+    - tao order add-on theo booking.
+  - Ops portal:
+    - tao venue/court/product,
+    - xem reports occupancy/revenue/best-hours.
+  - UI:
+    - dong bo visual theo huong xanh duong,
+    - responsive (mobile/desktop),
+    - nav + modal auth + card layout theo flow.
+  - Verify:
+    - `npm run lint` (chi con warning hook deps, khong co error)
+    - `npm run build` pass.
+- File anh huong:
+  - `frontend/package.json`
+  - `frontend/src/main.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/index.css`
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/context/AuthContext.tsx`
+  - `frontend/src/components/TopNav.tsx`
+  - `frontend/src/pages/LandingPage.tsx`
+  - `frontend/src/pages/customer/CustomerPortalPage.tsx`
+  - `frontend/src/pages/ops/OpsPortalPage.tsx`
+  - `frontend/README.md`
+  - `WORK_LOG.md`
+
+### 2026-03-31 - Dieu chinh frontend: uu tien giao dien giong file tham chieu, flow giu theo backend
+- Yeu cau: lam giao dien tuong tu file tham chieu, khong doi flow nghiep vu (flow phai theo backend).
+- Hanh dong:
+  - Refactor `customer` page thanh layout 3 cot giong mau:
+    - cot trai: bo loc dat san,
+    - giua: time-grid booking board,
+    - cot phai: tom tat + hanh dong draft/deposit/confirm.
+  - Refactor `ops` page thanh dashboard van hanh:
+    - KPI cards,
+    - bang lich su dung/revenue,
+    - panel quick actions tao venue/court/product.
+  - Cap nhat CSS de tao visual language gan mau tham chieu (blue board, card, grid, legend, table).
+  - Khong doi API flow hien tai, chi doi presentation.
+- Verify:
+  - `npm run lint` pass.
+  - `npm run build` pass.
+- File anh huong:
+  - `frontend/src/pages/customer/CustomerPortalPage.tsx`
+  - `frontend/src/pages/ops/OpsPortalPage.tsx`
+  - `frontend/src/index.css`
+  - `WORK_LOG.md`
+
+### 2026-04-06 - Frontend phase 1 hardening tiep tuc (theo thu tu)
+- Yeu cau: Thuc hien lan luot cac buoc da de xuat cho frontend dua tren backend contracts.
+- Muc dich: On dinh auth + route guard + payment flow + booking detail/account list de frontend co the tiep tuc sprint tiep theo.
+- Hanh dong:
+  - Fix TypeScript build errors trong frontend (ProtectedRoute, BookingDetailPage, PaymentPage).
+  - Chuan hoa PaymentPage de dung callback/initiate flow va bo canh bao hook deps.
+  - Bo sung CSS cho cac khoi moi: `pagination-row`, `reschedule-panel`, `payment-active-box`, `payment-list-box`.
+  - Chay quality gate frontend: `npm.cmd run lint` + `npm.cmd run build` (pass).
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/src/components/ProtectedRoute.tsx`
+  - `frontend/src/pages/customer/BookingDetailPage.tsx`
+  - `frontend/src/pages/customer/PaymentPage.tsx`
+  - `frontend/src/index.css`
+- Ghi chu: Da pass lint/build; co the tiep tuc buoc tiep theo la noi data thuc cho booking grid va payment proof upload.
+
+### 2026-04-06 - Frontend functional parity (dot 2)
+- Yeu cau: Lam theo danh sach best-practice frontend da de xuat (functional parity voi backend, role guard, idempotency, error handling).
+- Muc dich: Giam lech contract giua frontend va backend, va hoan thien cac man hinh con thieu cho ops/admin/reliability.
+- Hanh dong:
+  - Them trang batch booking flow (draft/deposit/confirm): `frontend/src/features/booking/BatchBookingPage.tsx`.
+  - Them trang notifications list/retry: `frontend/src/features/notification/NotificationsPage.tsx` + API client.
+  - Them trang admin user management (roles/status/revoke token): `frontend/src/features/admin/AdminUserManagementPage.tsx` + API client.
+  - Them trang DLQ replay console (core + payment): `frontend/src/features/reliability/DlqOpsPage.tsx` + API client.
+  - Cap nhat route role-based theo gateway policy trong `frontend/src/App.tsx` (booking grid, ops notifications, ops admin users, ops dlq).
+  - Cap nhat `OpsPortalPage` them quick links den cac man hinh ops moi.
+  - Bo sung idempotency header cho cac write action batch/order trong `frontend/src/lib/coreApi.ts`.
+  - Them utility xu ly loi theo contract (`traceId`, `details`) trong `frontend/src/lib/errorPresentation.ts` va ap dung cho cac trang booking/account/payment.
+  - Verify quality gate frontend: `npm.cmd run lint` + `npm.cmd run build` pass.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/src/App.tsx`
+  - `frontend/src/lib/coreApi.ts`
+  - `frontend/src/lib/errorPresentation.ts`
+  - `frontend/src/pages/ops/OpsPortalPage.tsx`
+  - `frontend/src/pages/customer/AccountPage.tsx`
+  - `frontend/src/pages/customer/BookingCheckoutPage.tsx`
+  - `frontend/src/pages/customer/BookingDetailPage.tsx`
+  - `frontend/src/pages/customer/PaymentPage.tsx`
+  - `frontend/src/features/booking/BatchBookingPage.tsx`
+  - `frontend/src/features/notification/notificationApi.ts`
+  - `frontend/src/features/notification/NotificationsPage.tsx`
+  - `frontend/src/features/admin/adminApi.ts`
+  - `frontend/src/features/admin/AdminUserManagementPage.tsx`
+  - `frontend/src/features/reliability/dlqApi.ts`
+  - `frontend/src/features/reliability/DlqOpsPage.tsx`
+- Ghi chu: Backend auth-service hien chua co endpoint list users, nen man admin users dang quan ly theo userId input.
+
+### 2026-04-06 - Hoan thien endpoint auth-service (admin users)
+- Yeu cau: Hoan thien endpoint cho auth-service.
+- Muc dich: Day du API admin user management de frontend co the list/get user thay vi chi update/revoke theo userId.
+- Hanh dong:
+  - Mo rong `AdminUserController`:
+    - `GET /api/auth/admin/users` (filter `q`, `status`, `role`, pageable)
+    - `GET /api/auth/admin/users/{userId}`
+  - Mo rong `AuthService` voi `getUser(...)`, `listUsers(...)` (Specification filter theo query/status/role).
+  - Mo rong `UserAccountRepository` thanh `JpaSpecificationExecutor`.
+  - Bo sung integration test cho service list/get admin user.
+  - Chay test auth-service: `mvn -Dmaven.repo.local=.m2repo test -q` (pass).
+- File anh huong:
+  - `services/auth-service/src/main/java/com/sportcourt/auth/controller/AdminUserController.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/service/AuthService.java`
+  - `services/auth-service/src/main/java/com/sportcourt/auth/repository/UserAccountRepository.java`
+  - `services/auth-service/src/test/java/com/sportcourt/auth/service/AuthServiceIntegrationTest.java`
+  - `WORK_LOG.md`
+
+### 2026-04-06 - Frontend admin users noi endpoint list/get moi
+- Yeu cau: Dong y noi frontend admin voi endpoint auth-service moi.
+- Muc dich: Bo UI nhap tay userId, thay bang list/filter/paging + get by id.
+- Hanh dong:
+  - Mo rong `frontend/src/features/admin/adminApi.ts`:
+    - `listAdminUsers(...)`
+    - `getAdminUserById(...)`
+  - Viet lai `frontend/src/features/admin/AdminUserManagementPage.tsx`:
+    - Table list user theo filter `q/status/role` + paging server-side.
+    - Chon row de nap vao panel edit.
+    - Van ho tro get-by-id, update roles/status, revoke tokens.
+  - Verify frontend: `npm.cmd run lint` + `npm.cmd run build` pass.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/src/features/admin/adminApi.ts`
+  - `frontend/src/features/admin/AdminUserManagementPage.tsx`
