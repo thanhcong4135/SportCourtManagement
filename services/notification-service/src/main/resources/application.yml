@@ -1,6 +1,30 @@
 spring:
   application:
     name: notification-service
+  datasource:
+    url: jdbc:mysql://localhost:${NOTIFICATION_DB_PORT:${MYSQL_NOTIFICATION_PORT:3309}}/notification_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: 123456
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${kafka.bootstrap-servers}
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        isolation.level: read_committed
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 server:
   port: 8084
@@ -16,3 +40,32 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+notification:
+  dispatcher:
+    fixed-delay-ms: 5000
+    batch-size: 100
+    max-attempts: 5
+    initial-backoff-ms: 5000
+    max-backoff-ms: 300000
+  delivery:
+    mock:
+      fail-recipient-pattern: ""
+
+kafka:
+  bootstrap-servers: localhost:9092
+  consumer:
+    retry:
+      max-attempts: 3
+      backoff-ms: 1000
+    dlq:
+      suffix: .dlq
+    booking:
+      enabled: true
+      group-id: notification-service-booking
+    payment:
+      enabled: true
+      group-id: notification-service-payment
+  topics:
+    booking-events: booking.events
+    payment-events: payment.events

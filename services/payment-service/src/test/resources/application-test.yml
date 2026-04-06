@@ -40,3 +40,5 @@ kafka:
   consumer:
     booking:
       enabled: false
+    booking-dlq:
+      enabled: false

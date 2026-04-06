@@ -55,6 +55,8 @@ public class BookingEventConsumer {
             BigDecimal priceTotal = event.path("priceTotal").decimalValue();
 
             paymentService.initiateDepositForBookingEvent(bookingId, customerId, priceTotal, eventId);
+        } catch (IllegalArgumentException ex) {
+            throw ex;
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to process booking event", ex);
         }

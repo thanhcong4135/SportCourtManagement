@@ -1,4 +1,4 @@
-package com.sportcourt.payment.config;
+package com.sportcourt.notification.config;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -16,7 +16,7 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration
 @EnableKafka
-public class KafkaConfig {
+public class KafkaReliabilityConfig {
 
     @Bean
     DefaultErrorHandler kafkaDefaultErrorHandler(

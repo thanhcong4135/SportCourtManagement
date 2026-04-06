@@ -1,0 +1,37 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:notification_service_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: false
+  task:
+    scheduling:
+      enabled: false
+
+kafka:
+  consumer:
+    booking:
+      enabled: false
+    payment:
+      enabled: false
+
+notification:
+  dispatcher:
+    fixed-delay-ms: 1000
+    batch-size: 50
+    max-attempts: 2
+    initial-backoff-ms: 1
+    max-backoff-ms: 10
+  delivery:
+    mock:
+      fail-recipient-pattern: fail

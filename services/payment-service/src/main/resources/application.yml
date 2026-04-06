@@ -75,12 +75,20 @@ kafka:
       backoff-ms: 1000
     dlq:
       suffix: .dlq
+    booking-dlq:
+      enabled: true
+      group-id: payment-service-booking-dlq
     booking:
       enabled: true
       group-id: payment-service-booking
+  dlq:
+    replay:
+      max-attempts: 5
   topics:
     booking-events: booking.events
     payment-events: payment.events
+    booking-events-dlq: booking.events.dlq
+    payment-events-dlq: payment.events.dlq
 
 outbox:
   publisher:

@@ -57,8 +57,8 @@ class BookingEventConsumerTest {
             """;
 
         assertThatThrownBy(() -> consumer.consumeBookingEvent(payload, "booking.events", null))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("Failed to process booking event");
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported booking event schemaVersion");
 
         verifyNoInteractions(paymentService);
     }

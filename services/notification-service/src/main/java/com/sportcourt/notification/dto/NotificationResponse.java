@@ -14,6 +14,16 @@ public record NotificationResponse(
     String templateCode,
     String message,
     Map<String, String> metadata,
-    OffsetDateTime createdAt
+    UUID bookingId,
+    UUID paymentId,
+    UUID customerId,
+    String sourceEventId,
+    String sourceEventType,
+    String traceId,
+    int retryCount,
+    String lastError,
+    OffsetDateTime createdAt,
+    OffsetDateTime sentAt,
+    OffsetDateTime updatedAt
 ) {
 }
