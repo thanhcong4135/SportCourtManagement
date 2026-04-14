@@ -1778,3 +1778,157 @@ File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservice
   - `WORK_LOG.md`
   - `frontend/src/features/admin/adminApi.ts`
   - `frontend/src/features/admin/AdminUserManagementPage.tsx`
+
+### 2026-04-06 - Frontend hardening dot tiep theo (error + idempotency + text)
+- Yeu cau: Tiep tuc frontend theo best-practice da thong nhat.
+- Muc dich: Chuan hoa contract loi/traceId, bo sung idempotency cho write action con thieu, va sua text UI tieng Viet bi loi hien thi.
+- Hanh dong:
+  - Chuan hoa error handling (toErrorPresentation + traceId) cho:
+    - `frontend/src/pages/customer/DiscoverPage.tsx`
+    - `frontend/src/pages/customer/BookingGridPage.tsx`
+    - `frontend/src/pages/ops/OpsPortalPage.tsx`
+  - Bo sung `Idempotency-Key` cho write action:
+    - `frontend/src/features/admin/adminApi.ts` (update roles/status, revoke tokens)
+    - `frontend/src/features/notification/notificationApi.ts` (retry)
+    - `frontend/src/features/reliability/dlqApi.ts` (replay core/payment)
+    - `frontend/src/pages/ops/OpsPortalPage.tsx` (create venue/court/product)
+  - Viet lai va sua text UI tieng Viet cho cac trang moi:
+    - `frontend/src/features/booking/BatchBookingPage.tsx`
+    - `frontend/src/features/notification/NotificationsPage.tsx`
+    - `frontend/src/features/reliability/DlqOpsPage.tsx`
+    - `frontend/src/features/admin/AdminUserManagementPage.tsx`
+  - Verify frontend quality gate:
+    - `npm.cmd run lint` (pass)
+    - `npm.cmd run build` (pass)
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/src/pages/customer/DiscoverPage.tsx`
+  - `frontend/src/pages/customer/BookingGridPage.tsx`
+  - `frontend/src/pages/ops/OpsPortalPage.tsx`
+  - `frontend/src/features/booking/BatchBookingPage.tsx`
+  - `frontend/src/features/notification/notificationApi.ts`
+  - `frontend/src/features/notification/NotificationsPage.tsx`
+  - `frontend/src/features/admin/adminApi.ts`
+  - `frontend/src/features/admin/AdminUserManagementPage.tsx`
+  - `frontend/src/features/reliability/dlqApi.ts`
+  - `frontend/src/features/reliability/DlqOpsPage.tsx`
+
+### 2026-04-06 - Fix loi CORS khi dang ky tu frontend
+- Yeu cau: Dang ky tren UI bi `Failed to fetch` + browser bao CORS blocked khi goi `/api/auth/register` qua gateway.
+- Nguyen nhan: API gateway chua bat CORS policy cho origin `http://localhost:5173` va preflight OPTIONS bi chan boi security rule.
+- Hanh dong:
+  - Bat CORS trong Security WebFilterChain (`cors(Customizer.withDefaults())`).
+  - Permit preflight `OPTIONS /**` trong gateway security.
+  - Them `spring.cloud.gateway.globalcors` trong `application.yml`:
+    - allowed origin mac dinh `http://localhost:5173`
+    - methods/headers/credentials/maxAge.
+  - Verify compile gateway: `mvn -Dmaven.repo.local=.m2repo -DskipTests compile -q` (pass).
+- File anh huong:
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/SecurityConfig.java`
+  - `services/api-gateway/src/main/resources/application.yml`
+  - `WORK_LOG.md`
+
+### 2026-04-06 - Sua man hinh dat lich (Booking Grid) theo mau + cho phep chon khung gio tren bang
+- Yeu cau: Man hinh dat lich can giong trang mau hon, va nguoi dung phai click duoc tren bang thoi gian de chon gio dat.
+- Muc dich: Dua UX ve kieu visual scheduler, khong phu thuoc input gio thu cong, va dung nghiep vu "chon slot trong bang".
+- Hanh dong:
+  - Viet lai `BookingGridPage` de ho tro chon khung gio truc tiep tren luoi:
+    - Click lan 1: chon moc bat dau (1 slot).
+    - Click lan 2 cung hang: mo rong thanh range bat dau-ket thuc.
+    - Chan chon vao o da dat/bi khoa.
+    - Tu dong cap nhat `start/end` theo range da chon de di tiep sang checkout.
+  - Cap nhat giao dien theo style gan trang mau:
+    - Thanh legend mau (Trong/Da dat/Khoa/Dang chon).
+    - Header gon hon (Cum san + Ngay + Khung gio da chon).
+    - Luoi timeline co highlight slot dang chon.
+  - Cap nhat CSS cho timeline interactive (cell hover/selected/anchor/blocked).
+  - Verify frontend: `npm.cmd run lint` + `npm.cmd run build` (pass).
+- File anh huong:
+  - `frontend/src/pages/customer/BookingGridPage.tsx`
+  - `frontend/src/index.css`
+  - `WORK_LOG.md`
+
+### 2026-04-06 - Booking grid hien thi tat ca san theo dia chi
+- Yeu cau: Bang thoi gian hien chi 1 san; can hien day du so luong san theo dia chi.
+- Muc dich: Cho phep xem/chon tat ca san trong 1 dia chi hoac tren tat ca dia chi ngay tai man hinh booking grid.
+- Hanh dong:
+  - Mo rong `BookingGridPage`:
+    - Them tuy chon `Tat ca dia chi` trong combobox cum san.
+    - Khi chon `Tat ca dia chi`, frontend goi danh sach san cua tung venue va merge de hien thi toan bo.
+    - Giu selectedCourt hop le khi doi venue scope.
+    - Hien thong tin tong so san dang hien thi o phan notice.
+    - Khi di tiep checkout, lay `venueId` tu san da chon (ho tro ca mode Tat ca dia chi).
+  - Dieu chinh style row ten san de doc duoc khi hien kem ten venue.
+  - Verify frontend: `npm.cmd run lint` + `npm.cmd run build` (pass).
+- File anh huong:
+  - `frontend/src/pages/customer/BookingGridPage.tsx`
+  - `frontend/src/index.css`
+  - `WORK_LOG.md`
+
+### 2026-04-13 - Bo option "Tat ca dia chi" khoi booking grid
+- Yeu cau: Option "Tat ca dia chi" khong can thiet.
+- Muc dich: Don gian hoa UX theo nghiep vu, chi dat lich trong 1 cum san duoc chon.
+- Hanh dong:
+  - Loai bo toan bo logic `ALL_VENUES` trong `BookingGridPage`.
+  - Dropdown cum san chi hien thi danh sach venue that.
+  - Khi doi venue, load toan bo san cua venue do va render day du trong bang timeline.
+  - Giu nguyen co che click chon slot tren bang (start/end).
+  - Verify frontend: `npm.cmd run lint` + `npm.cmd run build` (pass).
+- File anh huong:
+  - `frontend/src/pages/customer/BookingGridPage.tsx`
+  - `WORK_LOG.md`
+
+### 2026-04-14 - Fix "Failed to fetch" khi UI load venues/courts
+- Yeu cau: UI van hien "Failed to fetch" du mot so endpoint test bang tay tra 200.
+- Nguyen nhan:
+  - Frontend tu dong gan `Authorization` cho moi request, ke ca endpoint public (`/api/core/venues`, `/api/core/courts`).
+  - Khi token local bi cu/hong, gateway tra 401; nhanh `ApiSecurityErrorHandler` truoc day khong bo sung CORS headers cho error response, browser hien CORS/network error -> "Failed to fetch".
+- Hanh dong:
+  - Frontend:
+    - Them rule `isPublicEndpoint(...)` trong `api.ts`.
+    - Khong auto attach access token cho endpoint public.
+    - Chi retry refresh token khi request that bai 401 va request do thuc su da gui auto token.
+  - API Gateway:
+    - Bo sung CORS headers cho response 401/403 trong `ApiSecurityErrorHandler` neu origin hop le.
+    - Bind lai OAuth2 resource-server entrypoint/accessDenied ve `ApiSecurityErrorHandler` de loi JWT cung theo chung error contract + CORS.
+    - Them config `app.security.cors.allowed-origins` va dung chung voi origin local frontend.
+- File anh huong:
+  - `frontend/src/lib/api.ts`
+  - `services/api-gateway/src/main/java/com/sportcourt/gateway/config/ApiSecurityErrorHandler.java`
+  - `services/api-gateway/src/main/resources/application.yml`
+  - `WORK_LOG.md`
+
+### 2026-04-14 - Giu header trang chu khi cuon + sat footer nav xuong day man hinh
+- Yeu cau: O trang Discover, khoi header (hero + search toolbar) phai giu nguyen khi cuon danh sach san; thanh bottom nav phai sat day man hinh, khong ho khoang trong.
+- Hanh dong:
+  - Boc hero + toolbar vao wrapper `discover-sticky` de sticky theo viewport.
+  - Them CSS `position: sticky` cho `discover-sticky`, tang z-index va them gradient nen de khong bi card "chui" vao header.
+  - Dieu chinh bottom nav:
+    - `left/right/bottom = 0`
+    - bo border duoi, bo goc bo tron phia duoi de sat day man hinh.
+  - Dieu chinh `padding-bottom` cua `.alobo-screen` de tranh noi dung bi de len nav.
+- File anh huong:
+  - `frontend/src/pages/customer/DiscoverPage.tsx`
+  - `frontend/src/index.css`
+  - `WORK_LOG.md`
+
+### 2026-04-14 - Dieu chinh header Discover sat mep tren man hinh
+- Yeu cau: Header trang chu can sat mep tren nhu bottom nav sat mep duoi.
+- Hanh dong:
+  - Them `.discover-screen { padding-top: 0; }` de bo khoang trong tren cung.
+  - Chinh `.discover-sticky` tu `top: 0.2rem` thanh `top: 0`.
+  - Ap dung tuong tu trong media query mobile.
+- File anh huong:
+  - `frontend/src/index.css`
+  - `WORK_LOG.md`
+
+### 2026-04-14 - Doi tone mau chu dao frontend sang xanh duong
+- Yeu cau: Doi tong the mau chu dao cua web tu xanh la sang xanh duong.
+- Hanh dong:
+  - Cap nhat bang mau goc trong `:root` (primary/background/ink/line/shadow) sang he xanh duong.
+  - Doi cac mau hardcode con lai o cac khu vuc quan trong: hero, toolbar button, badge, timeline booking, account avatar, booking detail panel, auth background/tabs, ops table.
+  - Doi cac vien/overlay rgba dang xanh la sang xanh duong de theme dong bo.
+  - Verify frontend build thanh cong.
+- File anh huong:
+  - `frontend/src/index.css`
+  - `WORK_LOG.md`

@@ -3,6 +3,7 @@ package com.sportcourt.gateway.config;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportcourt.gateway.api.ApiError;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.http.HttpStatus;
@@ -18,15 +19,26 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 public class ApiSecurityErrorHandler implements ServerAuthenticationEntryPoint, ServerAccessDeniedHandler {
 
     private final ObjectMapper objectMapper;
+    private final List<String> allowedOrigins;
 
-    public ApiSecurityErrorHandler(ObjectMapper objectMapper) {
+    public ApiSecurityErrorHandler(
+        ObjectMapper objectMapper,
+        @Value("${app.security.cors.allowed-origins:http://localhost:5173}") String allowedOriginsRaw
+    ) {
         this.objectMapper = objectMapper;
+        this.allowedOrigins = Arrays.stream(allowedOriginsRaw.split(","))
+            .map(String::trim)
+            .filter(origin -> !origin.isEmpty())
+            .collect(Collectors.toList());
     }
 
     @Override
@@ -45,6 +57,7 @@ public class ApiSecurityErrorHandler implements ServerAuthenticationEntryPoint, 
                                   String message) {
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        appendCorsHeaders(exchange);
 
         String traceId = resolveTraceId(exchange);
         exchange.getResponse().getHeaders().set(TraceIdGlobalFilter.TRACE_HEADER, traceId);
@@ -63,6 +76,26 @@ public class ApiSecurityErrorHandler implements ServerAuthenticationEntryPoint, 
         DataBufferFactory bufferFactory = exchange.getResponse().bufferFactory();
         DataBuffer dataBuffer = bufferFactory.wrap(toBytes(error));
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
+    }
+
+    private void appendCorsHeaders(ServerWebExchange exchange) {
+        String origin = exchange.getRequest().getHeaders().getOrigin();
+        if (origin == null || origin.isBlank()) {
+            return;
+        }
+
+        if (!isAllowedOrigin(origin)) {
+            return;
+        }
+
+        exchange.getResponse().getHeaders().set("Access-Control-Allow-Origin", origin);
+        exchange.getResponse().getHeaders().set("Access-Control-Allow-Credentials", "true");
+        exchange.getResponse().getHeaders().set("Access-Control-Expose-Headers", TraceIdGlobalFilter.TRACE_HEADER);
+        exchange.getResponse().getHeaders().add("Vary", "Origin");
+    }
+
+    private boolean isAllowedOrigin(String origin) {
+        return allowedOrigins.contains("*") || allowedOrigins.contains(origin);
     }
 
     private String resolveTraceId(ServerWebExchange exchange) {

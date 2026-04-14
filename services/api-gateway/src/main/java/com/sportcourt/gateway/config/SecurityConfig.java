@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -35,11 +36,13 @@ public class SecurityConfig {
     SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            .cors(Customizer.withDefaults())
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(apiSecurityErrorHandler)
                 .accessDeniedHandler(apiSecurityErrorHandler)
             )
             .authorizeExchange(exchanges -> exchanges
+                .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .pathMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                 .pathMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout")
                 .permitAll()
@@ -64,7 +67,11 @@ public class SecurityConfig {
                 .hasAnyRole("CUSTOMER", "OWNER", "STAFF", "ADMIN", "SUPPORT")
                 .anyExchange().authenticated()
             )
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .authenticationEntryPoint(apiSecurityErrorHandler)
+                .accessDeniedHandler(apiSecurityErrorHandler)
+                .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+            )
             .build();
     }
 
