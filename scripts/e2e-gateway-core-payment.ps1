@@ -94,19 +94,35 @@ function Invoke-JsonApi {
         $json = $Body | ConvertTo-Json -Depth 8
         return Invoke-RestMethod -Method $Method -Uri $Url -Headers $Headers -ContentType "application/json" -Body $json -TimeoutSec 20
     } catch {
-        if ($null -ne $_.Exception.Response) {
-            $stream = $_.Exception.Response.GetResponseStream()
-            if ($null -ne $stream) {
-                $reader = [System.IO.StreamReader]::new($stream)
+        $errorBody = $null
+        $exception = $_.Exception
+        $responseProperty = $exception.PSObject.Properties["Response"]
+        if ($null -ne $responseProperty -and $null -ne $responseProperty.Value) {
+            $response = $responseProperty.Value
+            if ($response -is [System.Net.Http.HttpResponseMessage]) {
                 try {
-                    $errorBody = $reader.ReadToEnd()
-                    if (-not [string]::IsNullOrWhiteSpace($errorBody)) {
-                        Write-Host "API error response: $errorBody" -ForegroundColor Yellow
+                    $errorBody = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                } catch {
+                    # Ignore body extraction errors and keep the original exception.
+                }
+            } else {
+                $stream = $response.GetResponseStream()
+                if ($null -ne $stream) {
+                    $reader = [System.IO.StreamReader]::new($stream)
+                    try {
+                        $errorBody = $reader.ReadToEnd()
+                    } finally {
+                        $reader.Dispose()
                     }
-                } finally {
-                    $reader.Dispose()
                 }
             }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($errorBody) -and $null -ne $_.ErrorDetails) {
+            $errorBody = $_.ErrorDetails.Message
+        }
+        if (-not [string]::IsNullOrWhiteSpace($errorBody)) {
+            Write-Host "API error response: $errorBody" -ForegroundColor Yellow
         }
         throw
     }
@@ -140,10 +156,17 @@ function Assert-HealthEndpoint {
     $healthUrl = "$BaseUrl/actuator/health"
     Write-Host " - $Name => $healthUrl"
     try {
-        $health = Invoke-JsonApi -Method GET -Url $healthUrl -Headers @{}
-        if ($null -eq $health -or [string]$health.status -ne "UP") {
-            throw "$Name health status is not UP"
-        }
+        Wait-ForCondition -TimeoutSeconds 90 -IntervalSeconds 2 -Description "$Name health UP" -Probe {
+            try {
+                $health = Invoke-JsonApi -Method GET -Url $healthUrl -Headers @{}
+                if ($null -ne $health -and [string]$health.status -eq "UP") {
+                    return $true
+                }
+                return $null
+            } catch {
+                return $null
+            }
+        } | Out-Null
     } catch {
         throw "Health check failed for $Name at $healthUrl. $($_.Exception.Message)"
     }

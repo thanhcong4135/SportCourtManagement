@@ -1932,3 +1932,17 @@ File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservice
 - File anh huong:
   - `frontend/src/index.css`
   - `WORK_LOG.md`
+
+### 2026-04-15 - Fix CI e2e script fail khi check health endpoint tren GitHub Actions
+- Yeu cau: Job `Run gateway-core-payment e2e smoke` fail voi loi `The property 'Response' cannot be found on this object`.
+- Nguyen nhan:
+  - `Invoke-JsonApi` truy cap truc tiep `$_ .Exception.Response` trong `Set-StrictMode -Version Latest`; khi loi ket noi/timeout khong co property `Response` thi script nem loi phu.
+  - Health check dang one-shot, de fail ngau nhien khi service vua khoi dong tren CI.
+- Hanh dong:
+  - Sua `Invoke-JsonApi` de doc property `Response` theo kieu an toan (`PSObject.Properties["Response"]`), ho tro ca `HttpResponseMessage` va response stream.
+  - Bo sung fallback doc `ErrorDetails.Message` de log body loi khi co.
+  - Nâng `Assert-HealthEndpoint` thanh polling 90s (moi 2s) de giam flakiness startup.
+  - Parse-check script PowerShell sau khi sua.
+- File anh huong:
+  - `scripts/e2e-gateway-core-payment.ps1`
+  - `WORK_LOG.md`
