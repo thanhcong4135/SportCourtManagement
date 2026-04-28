@@ -1,6 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BottomNavigation } from "../../components/BottomNavigation";
 import { formatCurrency } from "../../lib/api";
 import { toErrorPresentation } from "../../lib/errorPresentation";
 import {
@@ -203,7 +202,7 @@ export function BatchBookingPage() {
   }
 
   return (
-    <div className="alobo-screen">
+    <div className="alobo-screen batch-booking-screen">
       <header className="simple-topbar">
         <Link to="/discover" className="back-link">←</Link>
         <h1>Đặt nhiều sân (Batch)</h1>
@@ -302,7 +301,6 @@ export function BatchBookingPage() {
       {error && <p className="inline-error">{error}{traceId ? ` (traceId: ${traceId})` : ""}</p>}
       {notice && <p className="inline-success">{notice}</p>}
 
-      <BottomNavigation active="booking" />
     </div>
   );
 }

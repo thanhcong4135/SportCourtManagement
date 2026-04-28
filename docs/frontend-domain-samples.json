@@ -1,0 +1,63 @@
+{
+  "venueSummary": {
+    "id": "v-01",
+    "name": "SC Pickleball Center",
+    "address": "123 Le Loi, HCM",
+    "sports": [
+      "PICKLEBALL",
+      "BADMINTON"
+    ],
+    "minPrice": 90000,
+    "openingHours": "05:00-24:00",
+    "availableSlotsCount": 18
+  },
+  "courtSummary": {
+    "id": "c-01",
+    "venueId": "v-01",
+    "name": "Court 1",
+    "sportType": "PICKLEBALL"
+  },
+  "timeslot": {
+    "courtId": "c-01",
+    "startTime": "2026-04-16T18:00:00+07:00",
+    "endTime": "2026-04-16T19:00:00+07:00",
+    "status": "AVAILABLE",
+    "price": 120000
+  },
+  "bookingDraft": {
+    "id": "b-01",
+    "venueId": "v-01",
+    "courtId": "c-01",
+    "startTime": "2026-04-16T18:00:00+07:00",
+    "endTime": "2026-04-16T19:00:00+07:00",
+    "subtotal": 120000,
+    "depositRequired": 60000,
+    "draftExpiryAt": "2026-04-16T17:45:00+07:00",
+    "status": "DRAFT"
+  },
+  "paymentTransactionView": {
+    "id": "p-01",
+    "bookingId": "b-01",
+    "amount": 60000,
+    "currency": "VND",
+    "status": "PENDING",
+    "checkoutUrl": "https://pay.example/checkout/p-01"
+  },
+  "userProfileView": {
+    "id": "u-01",
+    "email": "customer@example.com",
+    "displayName": "Nguyen Van A",
+    "phone": "0912345678"
+  },
+  "bookingHistoryItem": {
+    "id": "b-01",
+    "venueName": "SC Pickleball Center",
+    "courtName": "Court 1",
+    "startTime": "2026-04-16T18:00:00+07:00",
+    "endTime": "2026-04-16T19:00:00+07:00",
+    "bookingStatus": "CONFIRMED",
+    "paymentStatus": "DEPOSITED",
+    "totalPrice": 120000
+  }
+}
+

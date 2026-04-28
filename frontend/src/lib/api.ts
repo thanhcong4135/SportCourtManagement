@@ -1,4 +1,6 @@
-﻿const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "http://localhost:8080";
+import { appConfig } from "./appConfig";
+
+const API_BASE_URL = appConfig.apiBaseUrl;
 
 export type ApiError = {
   code?: string;
@@ -220,3 +222,4 @@ export function formatCurrency(amount: number | string): string {
 export function getApiBaseUrl(): string {
   return API_BASE_URL;
 }
+

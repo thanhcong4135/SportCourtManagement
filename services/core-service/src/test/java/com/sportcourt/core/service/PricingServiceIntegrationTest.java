@@ -119,6 +119,64 @@ class PricingServiceIntegrationTest {
         assertThat(pricingService.listRules(court.getId())).hasSize(1);
     }
 
+    @Test
+    void createRule_shouldRejectOverlapWithSameSpecificScope() {
+        Court court = createCourt("Court-Overlap");
+        pricingService.createRule(new PricingRuleCreateRequest(
+            court.getId(),
+            "Weekday standard morning",
+            PricingDayType.WEEKDAY,
+            LocalTime.of(8, 0),
+            LocalTime.of(12, 0),
+            PricingRuleCustomerTier.STANDARD,
+            money("240000"),
+            30
+        ));
+
+        assertThatThrownBy(() -> pricingService.createRule(new PricingRuleCreateRequest(
+            court.getId(),
+            "Weekday standard overlap",
+            PricingDayType.WEEKDAY,
+            LocalTime.of(10, 0),
+            LocalTime.of(13, 0),
+            PricingRuleCustomerTier.STANDARD,
+            money("250000"),
+            31
+        )))
+            .isInstanceOf(ResponseStatusException.class)
+            .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+            .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void createRule_shouldAllowFallbackRuleWithLowerPriority() {
+        Court court = createCourt("Court-Fallback");
+        pricingService.createRule(new PricingRuleCreateRequest(
+            court.getId(),
+            "Specific weekday vip",
+            PricingDayType.WEEKDAY,
+            LocalTime.of(8, 0),
+            LocalTime.of(12, 0),
+            PricingRuleCustomerTier.VIP,
+            money("300000"),
+            20
+        ));
+
+        PricingRuleResponse fallback = pricingService.createRule(new PricingRuleCreateRequest(
+            court.getId(),
+            "Fallback all",
+            PricingDayType.ALL,
+            LocalTime.of(5, 0),
+            LocalTime.of(23, 30),
+            PricingRuleCustomerTier.ALL,
+            money("120000"),
+            5
+        ));
+
+        assertThat(fallback.priority()).isEqualTo(5);
+        assertThat(pricingService.listRules(court.getId())).hasSize(2);
+    }
+
     private Court createCourt(String name) {
         Venue venue = venueService.create(new VenueCreateRequest("Venue-" + name, "Address"));
         return courtService.create(new CourtCreateRequest(venue.getId(), name, SportType.BADMINTON));

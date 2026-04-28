@@ -1,16 +1,16 @@
 ﻿import { NavLink } from "react-router-dom";
 
 type BottomNavigationProps = {
-  active: "discover" | "booking" | "account";
+  active: "home" | "discover" | "account";
 };
 
 export function BottomNavigation({ active }: BottomNavigationProps) {
   return (
     <nav className="alobo-bottom-nav" aria-label="Bottom navigation">
-      <NavLink to="/discover" className={active === "discover" ? "active" : ""}>
+      <NavLink to="/" className={active === "home" ? "active" : ""}>
         <span>Trang chủ</span>
       </NavLink>
-      <NavLink to="/booking/grid" className={active === "booking" ? "active" : ""}>
+      <NavLink to="/discover" className={active === "discover" ? "active" : ""}>
         <span>Khám phá</span>
       </NavLink>
       <NavLink to="/account" className={active === "account" ? "active" : ""}>

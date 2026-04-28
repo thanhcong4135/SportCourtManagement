@@ -1,5 +1,4 @@
 ﻿import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { toErrorPresentation } from "../../lib/errorPresentation";
 import {
   listCoreDlq,
@@ -113,9 +112,7 @@ export function DlqOpsPage() {
               <option value="REPLAYED">REPLAYED</option>
               <option value="FAILED">FAILED</option>
             </select>
-          </label>
-          <Link className="btn ghost" to="/ops">Về Ops Portal</Link>
-        </div>
+          </label>        </div>
 
         <div className="ops-table-wrap">
           <table className="ops-table">
@@ -171,3 +168,4 @@ export function DlqOpsPage() {
     </main>
   );
 }
+

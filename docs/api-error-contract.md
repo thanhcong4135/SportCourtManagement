@@ -22,6 +22,9 @@ The services now use one common error shape:
 - `traceId` is propagated by header `X-Trace-Id`.
 - If client does not send `X-Trace-Id`, service/gateway generates one.
 - `details` is used mainly for validation errors; other errors can return `null`.
+- Domain/business errors can expose dedicated `code` values for deterministic UI handling.
+  - Example in `core-service`: `PRICING_RULE_MISSING` with HTTP `422` and detail:
+    - `{"field":"missingSlotStart","message":"2026-04-17T18:30+07:00"}`
 - `core-service` keeps response envelope:
   - success: `{"success": true, "data": ..., "error": null}`
   - error: `{"success": false, "data": null, "error": { ...contract above... }}`

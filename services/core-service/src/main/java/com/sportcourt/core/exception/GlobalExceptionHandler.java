@@ -56,6 +56,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.failure(error));
     }
 
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex,
+                                                                     HttpServletRequest request) {
+        ApiError error = buildError(request, ex.getStatus(), ex.getCode(), ex.getMessage(), ex.getDetails());
+        return ResponseEntity.status(ex.getStatus()).body(ApiResponse.failure(error));
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiResponse<Void>> handleResponseStatus(ResponseStatusException ex,
                                                                   HttpServletRequest request) {

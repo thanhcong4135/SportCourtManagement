@@ -1,8 +1,15 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  OPS_DLQ_ROLES,
+  OPS_NOTIFICATIONS_ROLES,
+  OPS_PRICING_ROLES,
+  OPS_USER_MANAGEMENT_ROLES,
+} from "../../app/routeRolePolicy";
 import { apiFetch, createIdempotencyKey, formatCurrency } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { toErrorPresentation } from "../../lib/errorPresentation";
+import { listPricingRules } from "../../lib/coreApi";
 
 type Venue = { id: string; name: string; address: string };
 type Court = { id: string; venueId: string; name: string; sportType: string };
@@ -15,7 +22,7 @@ type BestHourRow = { hourOfDay: number; bookingCount: number; bookedHours: numbe
 const sports = ["BADMINTON", "PICKLEBALL", "FOOTBALL"];
 
 export function OpsPortalPage() {
-  const { token, isAuthenticated } = useAuth();
+  const { token, hasAnyRole, isAuthenticated } = useAuth();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [courts, setCourts] = useState<Court[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -33,8 +40,10 @@ export function OpsPortalPage() {
   const [occupancy, setOccupancy] = useState<OccupancyRow[]>([]);
   const [revenue, setRevenue] = useState<RevenueRow[]>([]);
   const [bestHours, setBestHours] = useState<BestHourRow[]>([]);
+  const [pricingRuleCountByCourt, setPricingRuleCountByCourt] = useState<Record<string, number>>({});
 
   const [busy, setBusy] = useState(false);
+  const [pricingHealthLoading, setPricingHealthLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [traceId, setTraceId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -68,10 +77,20 @@ export function OpsPortalPage() {
       ]);
       setCourts(courtRows);
       setProducts(productRows);
+      setPricingHealthLoading(true);
+      const pricingCounts = await Promise.all(
+        courtRows.map(async (court) => {
+          const rows = await listPricingRules(court.id);
+          return [court.id, rows.length] as const;
+        }),
+      );
+      setPricingRuleCountByCourt(Object.fromEntries(pricingCounts));
     } catch (err) {
       const uiError = toErrorPresentation(err, "Không tải được dữ liệu venue");
       setError(uiError.message);
       setTraceId(uiError.traceId ?? null);
+    } finally {
+      setPricingHealthLoading(false);
     }
   }, []);
 
@@ -83,6 +102,7 @@ export function OpsPortalPage() {
     if (!selectedVenueId) {
       setCourts([]);
       setProducts([]);
+      setPricingRuleCountByCourt({});
       return;
     }
     void loadVenueData(selectedVenueId);
@@ -213,26 +233,95 @@ export function OpsPortalPage() {
   const totalHours = occupancy.reduce((sum, row) => sum + Number(row.bookedHours), 0);
   const totalRevenue = revenue.reduce((sum, row) => sum + Number(row.totalRevenue), 0);
   const totalAddOn = revenue.reduce((sum, row) => sum + Number(row.addOnRevenue), 0);
+  const pricingCoveredCourtCount = courts.filter((court) => (pricingRuleCountByCourt[court.id] ?? 0) > 0).length;
+  const missingPricingCourts = courts.filter((court) => (pricingRuleCountByCourt[court.id] ?? 0) === 0);
+  const pricingCoveragePercent = courts.length ? Math.round((pricingCoveredCourtCount / courts.length) * 100) : 0;
+  const topBestHour = bestHours[0];
+  const topBestHourLabel = topBestHour
+    ? `${String(topBestHour.hourOfDay).padStart(2, "0")}:00 · ${topBestHour.bookingCount} lượt`
+    : "Chưa có dữ liệu";
 
   return (
     <main className="page ops-layout-page">
-      <section className="section-header">
-        <p className="eyebrow">Ops Dashboard</p>
-        <h1>Giao diện vận hành theo style tham chiếu: KPI cards + lịch + quick action panel</h1>
-        {!canWrite && <p className="muted">Đăng nhập role OWNER/ADMIN để tạo venue/court/product.</p>}
+      <section className="section-header ops-header-card">
+        <div className="ops-header-main">
+          <p className="eyebrow">SportCourt Operations</p>
+          <h1>Dashboard vận hành sân</h1>
+          <p className="muted">Materio-style: KPI nổi bật, insight nhanh, thao tác vận hành tập trung.</p>
+          {!canWrite && <p className="muted">Bạn đang ở chế độ chỉ xem. Cần OWNER/ADMIN để tạo dữ liệu.</p>}
+        </div>
+        <div className="ops-header-side">
+          <p><span>Venue hiện tại:</span> <strong>{selectedVenue?.name ?? "Chưa chọn"}</strong></p>
+          <p><span>Khoảng ngày:</span> <strong>{fromDate} → {toDate}</strong></p>
+          <p><span>Giờ cao điểm:</span> <strong>{topBestHourLabel}</strong></p>
+        </div>
+      </section>
+
+      <section className="ops-link-grid">
         <div className="ops-toolbar">
-          <Link className="btn ghost" to="/ops/notifications">Notifications</Link>
-          <Link className="btn ghost" to="/ops/admin/users">Admin Users</Link>
-          <Link className="btn ghost" to="/ops/dlq">DLQ Replay</Link>
+          {hasAnyRole(OPS_NOTIFICATIONS_ROLES) ? <Link className="btn ghost" to="/ops/notifications">Thông báo</Link> : null}
+          {hasAnyRole(OPS_PRICING_ROLES) ? <Link className="btn ghost" to="/ops/pricing-rules">Pricing Rules</Link> : null}
+          {hasAnyRole(OPS_USER_MANAGEMENT_ROLES) ? <Link className="btn ghost" to="/ops/admin/users">Quản lý người dùng</Link> : null}
+          {hasAnyRole(OPS_DLQ_ROLES) ? <Link className="btn ghost" to="/ops/dlq">DLQ Replay</Link> : null}
           <Link className="btn ghost" to="/booking/batch">Batch Booking</Link>
         </div>
       </section>
 
       <section className="grid four kpi-grid">
-        <article className="card kpi-card"><p>Bookings</p><strong>{totalBookings}</strong></article>
-        <article className="card kpi-card"><p>Booked Hours</p><strong>{totalHours.toFixed(1)}h</strong></article>
-        <article className="card kpi-card"><p>Total Revenue</p><strong>{formatCurrency(totalRevenue)}</strong></article>
-        <article className="card kpi-card"><p>Add-on Revenue</p><strong>{formatCurrency(totalAddOn)}</strong></article>
+        <article className="card kpi-card">
+          <span className="kpi-chip kpi-chip-info">Bookings</span>
+          <strong>{totalBookings}</strong>
+          <small>Tổng lượt đặt theo khoảng ngày đã chọn</small>
+        </article>
+        <article className="card kpi-card">
+          <span className="kpi-chip kpi-chip-info">Booked Hours</span>
+          <strong>{totalHours.toFixed(1)}h</strong>
+          <small>Tổng số giờ khai thác thực tế</small>
+        </article>
+        <article className="card kpi-card">
+          <span className="kpi-chip kpi-chip-success">Total Revenue</span>
+          <strong>{formatCurrency(totalRevenue)}</strong>
+          <small>Doanh thu booking + đặt cọc + add-on</small>
+        </article>
+        <article className="card kpi-card">
+          <span className="kpi-chip kpi-chip-accent">Add-on Revenue</span>
+          <strong>{formatCurrency(totalAddOn)}</strong>
+          <small>Doanh thu dịch vụ đi kèm</small>
+        </article>
+        <article className="card kpi-card">
+          <span className="kpi-chip kpi-chip-warning">Pricing Coverage</span>
+          <strong>{pricingCoveragePercent}%</strong>
+          <small>{pricingCoveredCourtCount}/{courts.length || 0} sân đã có rule</small>
+        </article>
+        <article className="card kpi-card">
+          <span className="kpi-chip kpi-chip-danger">Sân thiếu pricing</span>
+          <strong>{missingPricingCourts.length}</strong>
+          <small>{pricingHealthLoading ? "Đang kiểm tra..." : "Cần tạo baseline/rule chi tiết"}</small>
+        </article>
+      </section>
+
+      <section className="grid two ops-insight-grid">
+        <article className="card">
+          <h3>Insight vận hành nhanh</h3>
+          <ul className="list-clean">
+            <li>Giờ cao điểm hiện tại: <strong>{topBestHourLabel}</strong></li>
+            <li>Tỉ lệ phủ pricing: <strong>{pricingCoveragePercent}%</strong></li>
+            <li>Tổng số sản phẩm đang bán: <strong>{products.length}</strong></li>
+          </ul>
+        </article>
+        <article className="card">
+          <h3>Cảnh báo cần xử lý</h3>
+          {missingPricingCourts.length > 0 ? (
+            <ul className="list-clean">
+              {missingPricingCourts.slice(0, 3).map((court) => (
+                <li key={court.id}>{court.name} chưa có pricing rule</li>
+              ))}
+              {missingPricingCourts.length > 3 && <li>+{missingPricingCourts.length - 3} sân khác</li>}
+            </ul>
+          ) : (
+            <p className="inline-success">Không có cảnh báo pricing trong venue đã chọn.</p>
+          )}
+        </article>
       </section>
 
       <section className="ops-shell">
@@ -301,6 +390,26 @@ export function OpsPortalPage() {
               </ul>
             </article>
           </div>
+
+          <article className="card inner-card">
+            <h3>Tình trạng pricing rule theo sân</h3>
+            <ul className="list-clean">
+              {courts.map((court) => (
+                <li key={court.id} className="ops-pricing-row">
+                  <span>{court.name}</span>
+                  <strong>{pricingRuleCountByCourt[court.id] ?? 0} rule</strong>
+                </li>
+              ))}
+              {!courts.length && <li className="muted">Chưa có sân để đánh giá pricing.</li>}
+            </ul>
+            {missingPricingCourts.length > 0 ? (
+              <p className="inline-error">
+                Còn {missingPricingCourts.length} sân chưa có pricing rule. Vào trang Pricing Rules để tạo baseline.
+              </p>
+            ) : (
+              <p className="inline-success">Tất cả sân trong cụm này đã có pricing rule.</p>
+            )}
+          </article>
         </article>
 
         <article className="card ops-actions">
@@ -343,3 +452,5 @@ export function OpsPortalPage() {
     </main>
   );
 }
+
+

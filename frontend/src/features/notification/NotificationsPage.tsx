@@ -1,5 +1,4 @@
 ﻿import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { toErrorPresentation } from "../../lib/errorPresentation";
 import { listNotifications, retryNotification, type NotificationMessage, type NotificationStatus } from "./notificationApi";
 
@@ -84,7 +83,6 @@ export function NotificationsPage() {
               ))}
             </select>
           </label>
-          <Link className="btn ghost" to="/ops">Về Ops Portal</Link>
         </div>
 
         <div className="ops-table-wrap">
@@ -146,3 +144,4 @@ export function NotificationsPage() {
     </main>
   );
 }
+

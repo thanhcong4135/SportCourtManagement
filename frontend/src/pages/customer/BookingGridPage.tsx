@@ -1,7 +1,8 @@
-﻿import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { BottomNavigation } from "../../components/BottomNavigation";
+import { Button, Modal, useToast } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import { trackEvent } from "../../lib/analytics";
 import { toErrorPresentation } from "../../lib/errorPresentation";
 import {
   type Booking,
@@ -26,7 +27,7 @@ const timeMarkers = Array.from({ length: (END_MINUTE - START_MINUTE) / STEP_MINU
 
 const slotMarkers = timeMarkers.slice(0, -1);
 
-type SlotStatus = "free" | "booked" | "blocked";
+type SlotStatus = "free" | "held" | "booked" | "blocked";
 
 type SlotAnchor = {
   courtId: string;
@@ -51,9 +52,33 @@ function toMinutes(time: string) {
   return hh * 60 + mm;
 }
 
+function statusRank(status: SlotStatus): number {
+  switch (status) {
+    case "booked":
+      return 3;
+    case "held":
+      return 2;
+    case "blocked":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function mapBookingToSlotStatus(booking: Booking): SlotStatus {
+  if (booking.status === "DRAFT") {
+    return "held";
+  }
+  if (booking.status === "CONFIRMED" || booking.status === "IN_PROGRESS" || booking.status === "COMPLETED") {
+    return "booked";
+  }
+  return "free";
+}
+
 export function BookingGridPage() {
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -68,6 +93,8 @@ export function BookingGridPage() {
 
   const [selectionAnchor, setSelectionAnchor] = useState<SlotAnchor | null>(null);
   const [selectedRange, setSelectedRange] = useState<SelectedRange | null>(null);
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const [showClearSelectionModal, setShowClearSelectionModal] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -183,33 +210,69 @@ export function BookingGridPage() {
     }
 
     void loadSchedule();
-  }, [courts, selectedDate, token?.accessToken]);
+  }, [courts, refreshSignal, selectedDate, token?.accessToken]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setRefreshSignal((prev) => prev + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  useEffect(() => {
+    if (!courts.length) {
+      return;
+    }
+    const handle = window.setInterval(() => {
+      setRefreshSignal((prev) => prev + 1);
+    }, 15_000);
+    return () => window.clearInterval(handle);
+  }, [courts.length]);
 
   const selectedVenue = useMemo(() => venues.find((venue) => venue.id === selectedVenueId) ?? null, [selectedVenueId, venues]);
   const selectedCourt = useMemo(() => courts.find((court) => court.id === selectedCourtId) ?? null, [courts, selectedCourtId]);
 
-  function getOverlap(courtId: string, marker: string) {
-    const markerMinute = toMinutes(marker);
-    const rowBookings = bookingsByCourt[courtId] ?? [];
+  const slotStatusesByCourt = useMemo(() => {
+    const courtSlotMap: Record<string, SlotStatus[]> = {};
 
-    return rowBookings.find((booking) => {
-      if (booking.status === "CANCELED") {
-        return false;
-      }
-      const start = new Date(booking.startTime);
-      const end = new Date(booking.endTime);
-      const bookingStart = start.getHours() * 60 + start.getMinutes();
-      const bookingEnd = end.getHours() * 60 + end.getMinutes();
-      return markerMinute >= bookingStart && markerMinute < bookingEnd;
+    courts.forEach((court) => {
+      const slots: SlotStatus[] = Array.from({ length: slotMarkers.length }, () => "free");
+      const rowBookings = bookingsByCourt[court.id] ?? [];
+
+      rowBookings.forEach((booking) => {
+        if (booking.status === "CANCELED" || booking.status === "FAILED_TIMEOUT") {
+          return;
+        }
+        const slotStatus = mapBookingToSlotStatus(booking);
+        if (slotStatus === "free") {
+          return;
+        }
+        const start = new Date(booking.startTime);
+        const end = new Date(booking.endTime);
+        const bookingStart = start.getHours() * 60 + start.getMinutes();
+        const bookingEnd = end.getHours() * 60 + end.getMinutes();
+
+        slotMarkers.forEach((marker, index) => {
+          const markerMinute = toMinutes(marker);
+          if (markerMinute >= bookingStart && markerMinute < bookingEnd) {
+            if (statusRank(slotStatus) > statusRank(slots[index])) {
+              slots[index] = slotStatus;
+            }
+          }
+        });
+      });
+
+      courtSlotMap[court.id] = slots;
     });
-  }
+
+    return courtSlotMap;
+  }, [bookingsByCourt, courts]);
 
   function getSlotStatus(courtId: string, slotIndex: number): SlotStatus {
-    const overlap = getOverlap(courtId, slotMarkers[slotIndex]);
-    if (!overlap) {
-      return "free";
-    }
-    return overlap.status === "CANCELED" ? "blocked" : "booked";
+    return slotStatusesByCourt[courtId]?.[slotIndex] ?? "free";
   }
 
   function isRangeFree(courtId: string, startIndex: number, endIndex: number): boolean {
@@ -232,6 +295,13 @@ export function BookingGridPage() {
   function handleCellClick(courtId: string, slotIndex: number) {
     const status = getSlotStatus(courtId, slotIndex);
     if (status !== "free") {
+      showToast({
+        title: "Không chọn được ô này",
+        message: status === "held"
+          ? "Khung giờ này đang được giữ tạm bởi khách khác."
+          : "Khung giờ đã có người đặt hoặc bị khóa.",
+        variant: "warning",
+      });
       return;
     }
 
@@ -240,6 +310,10 @@ export function BookingGridPage() {
 
     if (!selectionAnchor || selectionAnchor.courtId !== courtId) {
       applyRange(courtId, slotIndex, slotIndex + 1, true);
+      showToast({
+        title: "Đã chọn điểm bắt đầu",
+        message: `${slotMarkers[slotIndex]} · ${courts.find((item) => item.id === courtId)?.name ?? "Sân"}`,
+      });
       return;
     }
 
@@ -248,23 +322,43 @@ export function BookingGridPage() {
 
     if (!isRangeFree(courtId, startIndex, endIndex)) {
       setError("Khung giờ chọn có ô đã được đặt hoặc bị khóa. Vui lòng chọn lại.");
+      showToast({ title: "Khung giờ không hợp lệ", message: "Khoảng thời gian có ô không trống.", variant: "error" });
       applyRange(courtId, slotIndex, slotIndex + 1, true);
       return;
     }
 
     applyRange(courtId, startIndex, endIndex, false);
+    trackEvent("funnel_grid_slot_range_selected", {
+      venueId: selectedVenueId,
+      courtId,
+      date: selectedDate,
+      start: slotMarkers[startIndex],
+      end: timeMarkers[endIndex],
+      slotCount: endIndex - startIndex,
+    });
+    showToast({
+      title: "Đã chọn khung giờ",
+      message: `${slotMarkers[startIndex]} - ${timeMarkers[endIndex]}`,
+      variant: "success",
+    });
   }
 
   function goNext() {
     if (!selectedCourt || !selectedDate || !startTime || !endTime) {
       setError("Vui lòng chọn sân và khung giờ trên bảng trước khi tiếp tục.");
       setTraceId(null);
+      showToast({
+        title: "Thiếu thông tin đặt lịch",
+        message: "Bạn cần chọn sân và khung giờ trước khi tiếp tục.",
+        variant: "warning",
+      });
       return;
     }
 
     if (toMinutes(endTime) <= toMinutes(startTime)) {
       setError("Khung giờ không hợp lệ: giờ kết thúc phải lớn hơn giờ bắt đầu.");
       setTraceId(null);
+      showToast({ title: "Giờ không hợp lệ", message: "Giờ kết thúc phải lớn hơn giờ bắt đầu.", variant: "error" });
       return;
     }
 
@@ -275,7 +369,34 @@ export function BookingGridPage() {
       start: startTime,
       end: endTime,
     });
+    trackEvent("funnel_grid_continue_checkout", {
+      venueId: selectedVenueId,
+      courtId: selectedCourt.id,
+      date: selectedDate,
+      start: startTime,
+      end: endTime,
+    });
     navigate(`/booking/form?${params.toString()}`);
+  }
+
+  function resetSelection() {
+    trackEvent("funnel_grid_selection_cleared", {
+      venueId: selectedVenueId,
+      courtId: selectedCourtId,
+      date: selectedDate,
+    });
+    setSelectionAnchor(null);
+    setSelectedRange(null);
+    setStartTime("");
+    setEndTime("");
+    setShowClearSelectionModal(false);
+    showToast({ title: "Đã xóa lựa chọn", variant: "info" });
+  }
+
+  function applyQuickDate(offsetDays: number) {
+    const next = new Date();
+    next.setDate(next.getDate() + offsetDays);
+    setSelectedDate(formatIsoDate(next));
   }
 
   const timelineStyle = useMemo(() => ({
@@ -287,7 +408,7 @@ export function BookingGridPage() {
       <header className="simple-topbar">
         <Link to="/discover" className="back-link">←</Link>
         <h1>Đặt lịch ngày trực quan</h1>
-        <div className="topbar-spacer" />
+        <div className="booking-grid-date-chip">{selectedDate}</div>
       </header>
 
       <section className="booking-grid-toolbar booking-grid-toolbar-compact">
@@ -307,6 +428,12 @@ export function BookingGridPage() {
           <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
         </label>
 
+        <div className="booking-quick-dates">
+          <Button variant="ghost" size="sm" onClick={() => applyQuickDate(0)}>Hôm nay</Button>
+          <Button variant="ghost" size="sm" onClick={() => applyQuickDate(1)}>Ngày mai</Button>
+          <Button variant="secondary" size="sm" onClick={() => setRefreshSignal((prev) => prev + 1)}>Làm mới</Button>
+        </div>
+
         <div className="booking-selected-slot" aria-live="polite">
           <span>Khung giờ đã chọn</span>
           <strong>{startTime && endTime ? `${startTime} - ${endTime}` : "Chưa chọn"}</strong>
@@ -316,9 +443,13 @@ export function BookingGridPage() {
 
       <section className="booking-grid-legend">
         <div className="legend-chip"><span className="legend-color free" />Trống</div>
+        <div className="legend-chip"><span className="legend-color held" />Đang giữ chỗ</div>
         <div className="legend-chip"><span className="legend-color booked" />Đã đặt</div>
         <div className="legend-chip"><span className="legend-color blocked" />Khóa</div>
         <div className="legend-chip"><span className="legend-color selected" />Đang chọn</div>
+        <button type="button" className="legend-link" onClick={() => showToast({ title: "Bảng giá", message: "Bảng giá chi tiết sẽ được mở trong phase admin pricing.", variant: "info" })}>
+          Xem sân &amp; bảng giá
+        </button>
       </section>
 
       <section className="booking-grid-notice">
@@ -327,6 +458,7 @@ export function BookingGridPage() {
           Chỉ chọn được các ô trống.
         </p>
         {selectedVenue && <p>{selectedVenue.name} · {selectedVenue.address} · Tổng {courts.length} sân</p>}
+        <p>Dữ liệu được tự làm mới mỗi 15 giây để giảm lệch trạng thái khi nhiều người đặt cùng lúc.</p>
       </section>
 
       {error && <p className="inline-error">{error}{traceId ? ` (traceId: ${traceId})` : ""}</p>}
@@ -375,11 +507,35 @@ export function BookingGridPage() {
         ))}
       </section>
 
+      <section className="booking-grid-summary-card">
+        <div>
+          <p>Tóm tắt chọn giờ</p>
+          <strong>{startTime && endTime ? `${startTime} - ${endTime}` : "Chưa chọn khung giờ"}</strong>
+          <small>{selectedCourt ? `${selectedCourt.name} · ${selectedDate}` : "Chưa chọn sân"}</small>
+        </div>
+        <div className="booking-grid-summary-actions">
+          <Button variant="ghost" onClick={() => setShowClearSelectionModal(true)} disabled={!startTime || !endTime}>
+            Xóa lựa chọn
+          </Button>
+          <Button variant="primary" onClick={goNext}>
+            Tiếp tục checkout
+          </Button>
+        </div>
+      </section>
+
       <button type="button" className="primary-bottom-btn" onClick={goNext}>
         TIẾP THEO
       </button>
 
-      <BottomNavigation active="booking" />
+      <Modal
+        open={showClearSelectionModal}
+        title="Xóa khung giờ đã chọn?"
+        message="Bạn sẽ cần chọn lại từ đầu trên bảng thời gian."
+        confirmLabel="Xóa"
+        cancelLabel="Giữ lại"
+        onCancel={() => setShowClearSelectionModal(false)}
+        onConfirm={resetSelection}
+      />
     </div>
   );
 }

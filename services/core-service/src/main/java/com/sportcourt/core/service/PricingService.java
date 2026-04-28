@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.sportcourt.core.api.ApiErrorDetail;
 import com.sportcourt.core.domain.Court;
 import com.sportcourt.core.domain.PricingRule;
 import com.sportcourt.core.domain.enums.CustomerTier;
@@ -13,6 +14,7 @@ import com.sportcourt.core.dto.PricingQuoteResponse;
 import com.sportcourt.core.dto.PricingQuoteSlotResponse;
 import com.sportcourt.core.dto.PricingRuleCreateRequest;
 import com.sportcourt.core.dto.PricingRuleResponse;
+import com.sportcourt.core.exception.BusinessException;
 import com.sportcourt.core.repository.CourtRepository;
 import com.sportcourt.core.repository.PricingRuleRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,17 +46,20 @@ public class PricingService {
     private final ObjectMapper objectMapper;
     private final ZoneId businessZoneId;
     private final ZoneId responseZoneId;
+    private final BigDecimal defaultHourlyRate;
 
     public PricingService(PricingRuleRepository pricingRuleRepository,
                           CourtRepository courtRepository,
                           ObjectMapper objectMapper,
                           @Value("${app.time.business-zone:Asia/Ho_Chi_Minh}") String businessZone,
-                          @Value("${app.time.response-zone:Asia/Ho_Chi_Minh}") String responseZone) {
+                          @Value("${app.time.response-zone:Asia/Ho_Chi_Minh}") String responseZone,
+                          @Value("${app.pricing.default-hourly-rate:0}") BigDecimal defaultHourlyRate) {
         this.pricingRuleRepository = pricingRuleRepository;
         this.courtRepository = courtRepository;
         this.objectMapper = objectMapper;
         this.businessZoneId = ZoneId.of(businessZone);
         this.responseZoneId = ZoneId.of(responseZone);
+        this.defaultHourlyRate = defaultHourlyRate == null ? BigDecimal.ZERO : defaultHourlyRate;
     }
 
     @Transactional
@@ -62,6 +67,8 @@ public class PricingService {
         validateRuleWindow(req.startTime(), req.endTime());
         Court court = courtRepository.findById(req.courtId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Court not found"));
+        int requestedPriority = req.priority() == null ? 0 : req.priority();
+        validateRuleOverlap(court.getId(), req.dayType(), req.customerTier(), req.startTime(), req.endTime(), requestedPriority);
 
         PricingRule rule = new PricingRule();
         rule.setCourt(court);
@@ -71,7 +78,7 @@ public class PricingService {
         rule.setEndTime(req.endTime());
         rule.setCustomerTier(req.customerTier());
         rule.setPricePerHour(req.pricePerHour().setScale(2, RoundingMode.HALF_UP));
-        rule.setPriority(req.priority() == null ? 0 : req.priority());
+        rule.setPriority(requestedPriority);
         rule.setActive(true);
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         rule.setCreatedAt(now);
@@ -138,13 +145,29 @@ public class PricingService {
             OffsetDateTime slotEnd = cursor.plusMinutes(SLOT_MINUTES);
             PricingRule matched = findRuleForSlot(rules, cursor);
             if (matched == null) {
-                return quoteWithFallback(
-                    normalizedStart,
-                    normalizedEnd,
-                    effectiveTier,
-                    fallbackPriceTotal,
-                    cursor
-                );
+                if (fallbackPriceTotal != null && fallbackPriceTotal.compareTo(BigDecimal.ZERO) > 0) {
+                    return quoteWithFallback(
+                        normalizedStart,
+                        normalizedEnd,
+                        effectiveTier,
+                        fallbackPriceTotal,
+                        cursor
+                    );
+                }
+
+                PricingQuoteSlot fallbackSlot = buildDefaultFallbackSlot(cursor, slotEnd);
+                if (fallbackSlot == null) {
+                    throw new BusinessException(
+                        HttpStatus.UNPROCESSABLE_ENTITY,
+                        "PRICING_RULE_MISSING",
+                        "No pricing rule for slot starting " + toResponseOffset(cursor),
+                        List.of(new ApiErrorDetail("missingSlotStart", toResponseOffset(cursor).toString()))
+                    );
+                }
+                slots.add(fallbackSlot);
+                total = total.add(fallbackSlot.amount());
+                cursor = slotEnd;
+                continue;
             }
 
             BigDecimal amount = hourlyToSlotAmount(matched.getPricePerHour());
@@ -174,9 +197,11 @@ public class PricingService {
                                                  BigDecimal fallbackPriceTotal,
                                                  OffsetDateTime missingSlotStart) {
         if (fallbackPriceTotal == null || fallbackPriceTotal.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "No pricing rule for slot starting " + toResponseOffset(missingSlotStart)
+            throw new BusinessException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "PRICING_RULE_MISSING",
+                "No pricing rule for slot starting " + toResponseOffset(missingSlotStart),
+                List.of(new ApiErrorDetail("missingSlotStart", toResponseOffset(missingSlotStart).toString()))
             );
         }
 
@@ -201,6 +226,22 @@ public class PricingService {
             total,
             slots,
             buildSnapshotJson(customerTier, normalizedStart, normalizedEnd, slots, total)
+        );
+    }
+
+    private PricingQuoteSlot buildDefaultFallbackSlot(OffsetDateTime slotStart, OffsetDateTime slotEnd) {
+        if (defaultHourlyRate.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+
+        BigDecimal normalizedRate = defaultHourlyRate.setScale(2, RoundingMode.HALF_UP);
+        return new PricingQuoteSlot(
+            toResponseOffset(slotStart),
+            toResponseOffset(slotEnd),
+            null,
+            "DEFAULT_FALLBACK_RATE",
+            normalizedRate,
+            hourlyToSlotAmount(normalizedRate)
         );
     }
 
@@ -282,6 +323,53 @@ public class PricingService {
         }
     }
 
+    private void validateRuleOverlap(UUID courtId,
+                                     PricingDayType candidateDayType,
+                                     PricingRuleCustomerTier candidateTier,
+                                     LocalTime candidateStart,
+                                     LocalTime candidateEnd,
+                                     int candidatePriority) {
+        List<PricingRule> existingRules = pricingRuleRepository.findByCourtIdOrderByPriorityDescCreatedAtAsc(courtId);
+        int candidateSpecificity = specificity(candidateDayType, candidateTier);
+
+        for (PricingRule existing : existingRules) {
+            if (!existing.isActive()) {
+                continue;
+            }
+            if (!isTimeOverlapped(candidateStart, candidateEnd, existing.getStartTime(), existing.getEndTime())) {
+                continue;
+            }
+            if (!isDayScopeOverlapped(candidateDayType, existing.getDayType())) {
+                continue;
+            }
+            if (!isTierScopeOverlapped(candidateTier, existing.getCustomerTier())) {
+                continue;
+            }
+
+            int existingSpecificity = specificity(existing.getDayType(), existing.getCustomerTier());
+            if (candidateSpecificity == existingSpecificity) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Pricing rule overlaps existing rule with same scope: " + existing.getName()
+                );
+            }
+
+            if (candidateSpecificity > existingSpecificity && candidatePriority <= existing.getPriority()) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Specific pricing rule must have higher priority than broader overlapping rule: " + existing.getName()
+                );
+            }
+
+            if (candidateSpecificity < existingSpecificity && candidatePriority >= existing.getPriority()) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Fallback/broader pricing rule must have lower priority than specific overlapping rule: " + existing.getName()
+                );
+            }
+        }
+    }
+
     private void validateTimeRange(OffsetDateTime startTime, OffsetDateTime endTime) {
         if (startTime == null || endTime == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start/end time required");
@@ -324,6 +412,24 @@ public class PricingService {
             case VIP -> PricingRuleCustomerTier.VIP;
             case STANDARD -> PricingRuleCustomerTier.STANDARD;
         };
+    }
+
+    private boolean isTimeOverlapped(LocalTime startA, LocalTime endA, LocalTime startB, LocalTime endB) {
+        return startA.isBefore(endB) && endA.isAfter(startB);
+    }
+
+    private boolean isDayScopeOverlapped(PricingDayType left, PricingDayType right) {
+        return left == PricingDayType.ALL || right == PricingDayType.ALL || left == right;
+    }
+
+    private boolean isTierScopeOverlapped(PricingRuleCustomerTier left, PricingRuleCustomerTier right) {
+        return left == PricingRuleCustomerTier.ALL || right == PricingRuleCustomerTier.ALL || left == right;
+    }
+
+    private int specificity(PricingDayType dayType, PricingRuleCustomerTier tier) {
+        int dayScore = dayType == PricingDayType.ALL ? 0 : 1;
+        int tierScore = tier == PricingRuleCustomerTier.ALL ? 0 : 1;
+        return dayScore + tierScore;
     }
 
     private PricingDayType mapDayType(DayOfWeek dayOfWeek) {

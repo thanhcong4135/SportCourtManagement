@@ -36,7 +36,25 @@ function readStoredToken(): AuthTokens | null {
     return null;
   }
   try {
-    return JSON.parse(raw) as AuthTokens;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+
+    const directToken = parsed as Partial<AuthTokens>;
+    if (typeof directToken.accessToken === "string" || typeof directToken.refreshToken === "string") {
+      return directToken as AuthTokens;
+    }
+
+    // Backward compatibility: some old builds stored envelope-shaped data.
+    const nestedToken = (parsed as { data?: Partial<AuthTokens> }).data;
+    if (nestedToken && (typeof nestedToken.accessToken === "string" || typeof nestedToken.refreshToken === "string")) {
+      return nestedToken as AuthTokens;
+    }
+
+    localStorage.removeItem(STORAGE_KEY);
+    return null;
   } catch {
     localStorage.removeItem(STORAGE_KEY);
     return null;

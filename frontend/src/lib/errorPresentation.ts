@@ -1,4 +1,5 @@
-import { ApiRequestError } from "./api";
+﻿import { ApiRequestError } from "./api";
+import { getUserFriendlyErrorMessage } from "./errorMessageCatalog";
 
 export type ErrorPresentation = {
   message: string;
@@ -7,11 +8,27 @@ export type ErrorPresentation = {
 };
 
 function normalizeDetails(details: unknown): Record<string, string> {
-  if (!details || typeof details !== "object") {
+  if (!details) {
     return {};
   }
 
   if (Array.isArray(details)) {
+    const mapped: Record<string, string> = {};
+    details.forEach((item, index) => {
+      if (!item || typeof item !== "object") {
+        return;
+      }
+      const row = item as Record<string, unknown>;
+      const field = typeof row.field === "string" && row.field.trim() ? row.field.trim() : `item_${index + 1}`;
+      const message = typeof row.message === "string" && row.message.trim() ? row.message.trim() : "";
+      if (message) {
+        mapped[field] = message;
+      }
+    });
+    return mapped;
+  }
+
+  if (typeof details !== "object") {
     return {};
   }
 
@@ -32,7 +49,7 @@ function normalizeDetails(details: unknown): Record<string, string> {
 export function toErrorPresentation(error: unknown, fallback = "Đã có lỗi xảy ra"): ErrorPresentation {
   if (error instanceof ApiRequestError) {
     return {
-      message: error.message || fallback,
+      message: getUserFriendlyErrorMessage(error, fallback),
       traceId: error.traceId,
       fieldErrors: normalizeDetails(error.details),
     };

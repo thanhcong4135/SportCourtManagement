@@ -1,32 +1,40 @@
-﻿import { useState } from "react";
-import type { FormEvent } from "react";
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Button, InputField } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import { type LoginFormValues, loginSchema } from "../../features/auth/authSchemas";
+import { toErrorPresentation } from "../../lib/errorPresentation";
 
 export function AuthLoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [searchParams] = useSearchParams();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [tab, setTab] = useState<"PHONE" | "EMAIL">("PHONE");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [traceId, setTraceId] = useState<string | null>(null);
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
   const redirect = searchParams.get("redirect") || "/discover";
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
+  async function onSubmit(values: LoginFormValues) {
     try {
-      setLoading(true);
       setError(null);
-      await login({ email, password });
+      setTraceId(null);
+      await login(values);
       navigate(redirect);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Đăng nhập thất bại");
-    } finally {
-      setLoading(false);
+      const uiError = toErrorPresentation(err, "Đăng nhập thất bại");
+      setError(uiError.message);
+      setTraceId(uiError.traceId ?? null);
     }
   }
 
@@ -39,7 +47,7 @@ export function AuthLoginPage() {
       </header>
 
       <main className="auth-card-wrap">
-        <form className="auth-card" onSubmit={onSubmit}>
+        <form className="auth-card" onSubmit={form.handleSubmit(onSubmit)}>
           <div className="auth-tabs">
             <button type="button" className={tab === "PHONE" ? "active" : ""} onClick={() => setTab("PHONE")}>
               Số điện thoại
@@ -53,33 +61,29 @@ export function AuthLoginPage() {
             <p className="inline-muted">Backend hiện tại login bằng email. Vui lòng nhập email bên dưới.</p>
           )}
 
-          <label>
-            Email của bạn?
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Nhập email"
-              required
-            />
-          </label>
+          <InputField
+            label="Email của bạn?"
+            type="email"
+            placeholder="Nhập email"
+            autoComplete="email"
+            {...form.register("email")}
+            error={form.formState.errors.email?.message}
+          />
 
-          <label>
-            Mật khẩu
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Nhập mật khẩu"
-              required
-            />
-          </label>
+          <InputField
+            label="Mật khẩu"
+            type="password"
+            placeholder="Nhập mật khẩu"
+            autoComplete="current-password"
+            {...form.register("password")}
+            error={form.formState.errors.password?.message}
+          />
 
-          {error && <p className="inline-error">{error}</p>}
+          {error && <p className="inline-error">{error}{traceId ? ` (traceId: ${traceId})` : ""}</p>}
 
-          <button type="submit" className="booking-cta" disabled={loading}>
-            {loading ? "Đang xử lý..." : "ĐĂNG NHẬP"}
-          </button>
+          <Button type="submit" className="booking-cta" fullWidth disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? "Đang xử lý..." : "ĐĂNG NHẬP"}
+          </Button>
 
           <p className="auth-footnote">
             Bạn chưa có tài khoản? <Link to="/auth/register">Đăng ký</Link>

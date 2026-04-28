@@ -1,35 +1,42 @@
-﻿import { useState } from "react";
-import type { FormEvent } from "react";
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
+import { Button, InputField } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import { type RegisterFormValues, registerSchema } from "../../features/auth/authSchemas";
+import { toErrorPresentation } from "../../lib/errorPresentation";
 
 export function AuthRegisterPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
-
-  const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [traceId, setTraceId] = useState<string | null>(null);
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (password !== confirmPassword) {
-      setError("Mật khẩu xác nhận không khớp");
-      return;
-    }
+  const form = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      email: "",
+      displayName: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
 
+  async function onSubmit(values: RegisterFormValues) {
     try {
-      setLoading(true);
       setError(null);
-      await register({ email, password, displayName });
+      setTraceId(null);
+      await register({
+        email: values.email,
+        displayName: values.displayName,
+        password: values.password,
+      });
       navigate("/discover");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Đăng ký thất bại");
-    } finally {
-      setLoading(false);
+      const uiError = toErrorPresentation(err, "Đăng ký thất bại");
+      setError(uiError.message);
+      setTraceId(uiError.traceId ?? null);
     }
   }
 
@@ -42,57 +49,47 @@ export function AuthRegisterPage() {
       </header>
 
       <main className="auth-card-wrap">
-        <form className="auth-card" onSubmit={onSubmit}>
-          <label>
-            Email của bạn?
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Nhập email"
-              required
-            />
-          </label>
+        <form className="auth-card" onSubmit={form.handleSubmit(onSubmit)}>
+          <InputField
+            label="Email của bạn?"
+            type="email"
+            placeholder="Nhập email"
+            autoComplete="email"
+            {...form.register("email")}
+            error={form.formState.errors.email?.message}
+          />
 
-          <label>
-            Tên đầy đủ
-            <input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="Nhập họ và tên"
-              required
-            />
-          </label>
+          <InputField
+            label="Tên đầy đủ"
+            placeholder="Nhập họ và tên"
+            autoComplete="name"
+            {...form.register("displayName")}
+            error={form.formState.errors.displayName?.message}
+          />
 
-          <label>
-            Mật khẩu
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              minLength={8}
-              placeholder="Nhập mật khẩu"
-              required
-            />
-          </label>
+          <InputField
+            label="Mật khẩu"
+            type="password"
+            placeholder="Nhập mật khẩu"
+            autoComplete="new-password"
+            {...form.register("password")}
+            error={form.formState.errors.password?.message}
+          />
 
-          <label>
-            Nhập lại mật khẩu
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              minLength={8}
-              placeholder="Nhập lại mật khẩu"
-              required
-            />
-          </label>
+          <InputField
+            label="Nhập lại mật khẩu"
+            type="password"
+            placeholder="Nhập lại mật khẩu"
+            autoComplete="new-password"
+            {...form.register("confirmPassword")}
+            error={form.formState.errors.confirmPassword?.message}
+          />
 
-          {error && <p className="inline-error">{error}</p>}
+          {error && <p className="inline-error">{error}{traceId ? ` (traceId: ${traceId})` : ""}</p>}
 
-          <button type="submit" className="booking-cta" disabled={loading}>
-            {loading ? "Đang xử lý..." : "ĐĂNG KÝ"}
-          </button>
+          <Button type="submit" className="booking-cta" fullWidth disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? "Đang xử lý..." : "ĐĂNG KÝ"}
+          </Button>
 
           <p className="auth-footnote">
             Bạn đã có tài khoản? <Link to="/auth/login">Đăng nhập</Link>

@@ -99,6 +99,8 @@ kafka:
 app:
   scheduling:
     enabled: true
+  pricing:
+    default-hourly-rate: 100000
   security:
     jwt:
       issuer-uri: ${APP_SECURITY_JWT_ISSUER:https://auth.sportcourt.local}

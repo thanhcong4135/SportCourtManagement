@@ -1946,3 +1946,769 @@ File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservice
 - File anh huong:
   - `scripts/e2e-gateway-core-payment.ps1`
   - `WORK_LOG.md`
+
+### 2026-04-15 - Frontend phase 1 (foundation + Discover refactor)
+- Yeu cau: Bat dau cai thien frontend theo plan de tien can trai nghiem ALOBO.
+- Muc dich:
+  - Dung nen tang query/form/ui component de scale cac man nghiep vu tiep theo.
+  - Nang cap Discover page thanh trang tim san co filter/sort/loading/empty/error ro rang.
+- Hanh dong:
+  - Bo sung dependencies: `@tanstack/react-query`, `react-hook-form`, `zod`, `@hookform/resolvers`.
+  - Them app provider:
+    - `frontend/src/app/queryClient.ts`
+    - `frontend/src/app/providers/AppProviders.tsx`
+    - cap nhat `frontend/src/main.tsx` de wrap app bang QueryClientProvider + AuthProvider.
+  - Tao design system co ban:
+    - `frontend/src/components/ui/Button.tsx`
+    - `frontend/src/components/ui/InputField.tsx`
+    - `frontend/src/components/ui/SelectField.tsx`
+    - `frontend/src/components/ui/SkeletonCard.tsx`
+    - `frontend/src/components/ui/EmptyState.tsx`
+    - `frontend/src/components/ui/ErrorState.tsx`
+    - `frontend/src/components/ui/StatusBadge.tsx`
+    - `frontend/src/components/ui/index.ts`
+  - Them hook debounce `frontend/src/hooks/useDebouncedValue.ts`.
+  - Them query hook discover `frontend/src/features/venues/useDiscoverData.ts`.
+  - Refactor auth forms qua RHF + Zod:
+    - `frontend/src/features/auth/authSchemas.ts`
+    - `frontend/src/pages/auth/AuthLoginPage.tsx`
+    - `frontend/src/pages/auth/AuthRegisterPage.tsx`
+  - Refactor `frontend/src/pages/customer/DiscoverPage.tsx`:
+    - dung React Query lay venues + courts.
+    - search debounce + luu filter/sort tren URL.
+    - bo sung filter mon the thao + sort.
+    - bo sung loading skeleton, empty state, error state + retry.
+  - Cap nhat style trong `frontend/src/index.css` cho UI components va discover toolbar/card metadata/skeleton.
+  - Verify pass:
+    - `npm run lint`
+    - `npm run build`
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/package.json`
+  - `frontend/package-lock.json`
+  - `frontend/src/main.tsx`
+  - `frontend/src/index.css`
+  - `frontend/src/app/queryClient.ts`
+  - `frontend/src/app/providers/AppProviders.tsx`
+  - `frontend/src/hooks/useDebouncedValue.ts`
+  - `frontend/src/features/venues/useDiscoverData.ts`
+  - `frontend/src/features/auth/authSchemas.ts`
+  - `frontend/src/components/ui/*`
+  - `frontend/src/pages/auth/AuthLoginPage.tsx`
+  - `frontend/src/pages/auth/AuthRegisterPage.tsx`
+  - `frontend/src/pages/customer/DiscoverPage.tsx`
+
+### 2026-04-15 - Tiep tuc theo frontend checklist (phase 1 + phase 4)
+- Yeu cau: Tiep tuc trien khai theo checklist frontend ALOBO.
+- Muc dich:
+  - Hoan thien cac muc con thieu cua phase 1 (config env + quality gate CI).
+  - Nang cap listing page theo checklist phase 4 (filter thuc dung, clear filter state).
+- Hanh dong:
+  - Them config app base URL:
+    - `frontend/src/lib/appConfig.ts`
+    - cap nhat `frontend/src/lib/api.ts` dung `appConfig.apiBaseUrl`.
+  - Them query key convention cho venues:
+    - `frontend/src/features/venues/queryKeys.ts`
+    - cap nhat `frontend/src/features/venues/useDiscoverData.ts`.
+  - Them quality gate scripts frontend:
+    - cap nhat `frontend/package.json` voi script `typecheck`.
+  - Them frontend CI workflow:
+    - `/.github/workflows/frontend-ci.yml` gom install -> lint -> typecheck -> build.
+  - Them env template:
+    - `frontend/.env.example`.
+  - Nang cap `frontend/src/pages/customer/DiscoverPage.tsx`:
+    - bo sung filter gia (`ALL`, `<100k`, `100k-150k`, `>150k`).
+    - bo sung bo dem so filter dang ap dung.
+    - them nut `Xoa tat ca` de reset nhanh query params.
+  - Cap nhat style:
+    - `frontend/src/index.css` cho toolbar 6 cot + summary bar filter.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `.github/workflows/frontend-ci.yml`
+  - `frontend/.env.example`
+  - `frontend/package.json`
+  - `frontend/src/lib/appConfig.ts`
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/features/venues/queryKeys.ts`
+  - `frontend/src/features/venues/useDiscoverData.ts`
+  - `frontend/src/pages/customer/DiscoverPage.tsx`
+  - `frontend/src/index.css`
+
+### 2026-04-15 - Tiep tuc checklist: phase 2 components + phase 5/6 booking UX
+- Yeu cau: Tiep tuc thuc hien cac buoc tiep theo trong checklist.
+- Muc dich:
+  - Bo sung UI primitives con thieu de xai lai duoc (Tabs/Drawer/Modal/Toast).
+  - Nang cap man Discover mobile filter va man Booking Grid theo huong booking-first.
+- Hanh dong:
+  - Bo sung components UI:
+    - `frontend/src/components/ui/Tabs.tsx`
+    - `frontend/src/components/ui/Drawer.tsx`
+    - `frontend/src/components/ui/Modal.tsx`
+    - `frontend/src/components/ui/ToastProvider.tsx`
+    - cap nhat `frontend/src/components/ui/index.ts`
+  - Bo sung ToastProvider vao app root:
+    - `frontend/src/app/providers/AppProviders.tsx`
+  - Nang cap Discover:
+    - Them mobile filter drawer (`Bộ lọc`) + tabs chon sort trong drawer.
+    - Nut clear filter va apply filter trong drawer.
+    - Nut "Bản đồ" hien toast thong bao phase sau.
+    - Files: `frontend/src/pages/customer/DiscoverPage.tsx`, `frontend/src/index.css`
+  - Nang cap Booking Grid (phase 5/6):
+    - Them quick date chips (Hôm nay, Ngày mai), nut Lam moi schedule.
+    - Them toast feedback khi chon slot/slot invalid/thieu thong tin.
+    - Them summary card "Tóm tắt chọn giờ" voi CTA checkout.
+    - Them modal xac nhan khi xoa lua chon slot.
+    - Them refetch khi tab browser active lai (`visibilitychange`).
+    - File: `frontend/src/pages/customer/BookingGridPage.tsx`, `frontend/src/index.css`
+  - Verify frontend pass:
+    - `npm run lint`
+    - `npm run typecheck`
+    - `npm run build`
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/src/components/ui/*`
+  - `frontend/src/app/providers/AppProviders.tsx`
+  - `frontend/src/pages/customer/DiscoverPage.tsx`
+  - `frontend/src/pages/customer/BookingGridPage.tsx`
+  - `frontend/src/index.css`
+
+### 2026-04-15 - Thuc hien theo thu tu checklist: phase 0 + phase 3
+- Yeu cau: Trien khai tiep theo dung thu tu checklist.
+- Muc dich:
+  - Chot tai lieu dinh huong MVP truoc khi mo rong them flow.
+  - Dua Home page ve huong booking-first de dan user vao listing co san query.
+- Hanh dong:
+  - Them tai lieu phase 0:
+    - `docs/frontend-mvp-statement.md`
+    - `docs/frontend-user-journey.md`
+    - `docs/frontend-alobo-benchmark.md`
+    - `docs/frontend-domain-objects.md`
+    - `docs/frontend-domain-samples.json`
+  - Them type ngu nghia domain frontend:
+    - `frontend/src/types/domain.ts`
+  - Refactor Home page (`frontend/src/pages/LandingPage.tsx`):
+    - quick search form (dia diem/sport/ngay/gio) voi RHF + Zod.
+    - submit dieu huong sang `/discover` kem query params.
+    - quick links cho cac kieu tim kiem pho bien.
+  - Cap nhat route:
+    - `frontend/src/App.tsx` dung `/` => `LandingPage` thay vi redirect thang `/discover`.
+  - Cap nhat style Home:
+    - `frontend/src/index.css` them landing hero/search/featured blocks + responsive.
+  - Verify frontend pass:
+    - `npm run lint`
+    - `npm run typecheck`
+    - `npm run build`
+- File anh huong:
+  - `WORK_LOG.md`
+  - `docs/frontend-mvp-statement.md`
+  - `docs/frontend-user-journey.md`
+  - `docs/frontend-alobo-benchmark.md`
+  - `docs/frontend-domain-objects.md`
+  - `docs/frontend-domain-samples.json`
+  - `frontend/src/types/domain.ts`
+  - `frontend/src/pages/LandingPage.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/index.css`
+
+## 2026-04-15 - Tach trang dat lich khoi bottom nav
+- Yeu cau:
+  - Khi vao cac trang dat lich thi khong hien thanh bottom nav (Trang chu/Kham pha/Tai khoan).
+- Da thuc hien:
+  - Xoa `BottomNavigation` khoi:
+    - `frontend/src/pages/customer/BookingGridPage.tsx`
+    - `frontend/src/pages/customer/BookingCheckoutPage.tsx`
+    - `frontend/src/features/booking/BatchBookingPage.tsx`
+  - Them class page cho batch:
+    - `alobo-screen batch-booking-screen`
+  - Dieu chinh spacing de khong de khoang trong danh cho nav o booking flow:
+    - `frontend/src/index.css`
+    - ghi de `padding-bottom` cho `booking-grid-screen`, `booking-checkout-screen`, `batch-booking-screen` (ca desktop + mobile).
+- Verify:
+  - `cmd /c npm run -s typecheck` (PASS)
+  - `cmd /c npm run -s build` (PASS)
+
+## 2026-04-15 - Dong bo benchmark voi quyet dinh UX booking flow
+- Yeu cau:
+  - Kiem tra conflict checklist va cap nhat benchmark neu can.
+- Da thuc hien:
+  - Cap nhat `docs/frontend-alobo-benchmark.md`:
+    - Rule Mobile UX: bottom nav chi hien o trang dieu huong chinh (`/discover`, `/account`).
+    - Booking/payment flow dung focused mode (an bottom nav).
+- Muc dich:
+  - Dam bao tai lieu benchmark khop implementation hien tai, tranh conflict mem trong checklist.
+
+## 2026-04-15 - An bottom nav o PaymentPage de flow lien mach
+- Yeu cau:
+  - An ca thanh nav tren trang thanh toan de flow booking/payment lien mach.
+- Da thuc hien:
+  - Xoa `BottomNavigation` khoi `frontend/src/pages/customer/PaymentPage.tsx`.
+  - Dieu chinh layout spacing trong `frontend/src/index.css`:
+    - Them `alobo-screen.payment-screen` vao nhom page khong chua khoang trong danh cho bottom nav (desktop + mobile).
+- Verify:
+  - `cmd /c npm run -s typecheck` (PASS)
+  - `cmd /c npm run -s build` (PASS)
+
+## 2026-04-15 - Tiep tuc checklist frontend: My Bookings tabs + context actions
+- Yeu cau:
+  - Tiep tuc lam tiep theo checklist frontend.
+- Da thuc hien:
+  - Nang cap `frontend/src/pages/customer/AccountPage.tsx`:
+    - Chuyen bo loc tu dropdown sang tabs: `Tat ca / Sap toi / Hoan thanh / Da huy`.
+    - Group booking theo logic nghiep vu:
+      - `Sap toi`: DRAFT, CONFIRMED, IN_PROGRESS
+      - `Hoan thanh`: COMPLETED
+      - `Da huy`: CANCELED, FAILED_TIMEOUT
+    - Bo sung action theo context tren tung booking:
+      - DRAFT + UNPAID => `Dat coc` (dieu huong `/payment/{bookingId}`)
+      - Cac trang thai khac => `Chi tiet`/`Xem lai` (dieu huong detail)
+    - Giu phan trang 10 item/trang tren tap du lieu da group.
+  - Cap nhat style `frontend/src/index.css`:
+    - Them class `account-tabs`.
+    - Them style `history-action-btn` va canh lai `history-status`.
+- Verify:
+  - `cmd /c npm run -s typecheck` (PASS)
+  - `cmd /c npm run -s build` (PASS)
+
+## 2026-04-15 - Hoan thien phase 7 (My Bookings + Booking Detail actions)
+- Yeu cau:
+  - Trien khai toan bo phase 7 theo checklist frontend.
+- Da thuc hien:
+  - Tao module presentation rule cho booking:
+    - `frontend/src/features/booking/bookingPresentation.ts`
+    - Gom map label status/payment va rule thao tac (`canDeposit/canCancel/canReschedule`).
+  - Refactor `frontend/src/pages/customer/AccountPage.tsx`:
+    - Dung chung label/rule tu `bookingPresentation`.
+    - Tabs `Tat ca / Sap toi / Hoan thanh / Da huy` + action theo context (Dat coc/Chi tiet/Xem lai).
+  - Nang cap `frontend/src/pages/customer/BookingDetailPage.tsx`:
+    - Hien thi pill status than thien (booking + payment).
+    - Action duoc mo/an theo rule nghiep vu:
+      - Huy: DRAFT/CONFIRMED
+      - Dat coc: DRAFT va chua DEPOSITED/PAID
+      - Doi lich: DRAFT/CONFIRMED
+    - Neu khong con action hop le thi hien note read-only.
+  - Cap nhat style:
+    - `frontend/src/index.css` them class cho status pill + action container.
+- Verify:
+  - `cmd /c npm run -s typecheck` (PASS)
+  - `cmd /c npm run -s build` (PASS)
+
+## 2026-04-15 - Trien khai Phase 8 checklist (Checkout + Payment UX)
+- Can cu:
+  - Doc checklist tu `frontend_alobo_dev_checklist_vi.pdf`.
+  - Phase 8 gom: checkout de ra quyet dinh, method selector, xu ly pending/success/fail, polling messaging, trust signals.
+- Da thuc hien:
+  - `frontend/src/pages/customer/BookingCheckoutPage.tsx`
+    - Bo sung thong tin quyet dinh: so slot, tong thoi luong, tong tien, coc toi thieu.
+    - Them preview phuong thuc thanh toan (component mo rong duoc cho nhieu methods).
+    - Them trust signals va policy note de giam phan tan nhung van ro nghiep vu.
+  - `frontend/src/pages/customer/PaymentPage.tsx`
+    - Them payment method selector (BANK_QR/MOMO_QR) voi UI mo rong duoc.
+    - Chuan hoa state banner theo nghiep vu:
+      - pending: dang xac nhan backend (polling 5s)
+      - success: da xac nhan thanh toan
+      - fail: cho phep thu lai
+    - Giu logic event-driven: khong success som truoc khi backend cap nhat.
+    - Lich su transaction sap xep theo `requestedAt` moi nhat.
+  - `frontend/src/index.css`
+    - Them style cho checkout method preview, trust signals, payment selector, payment state sections.
+    - Responsive cho `checkout-method-grid`.
+- Verify:
+  - `cmd /c npm run -s typecheck` (PASS)
+  - `cmd /c npm run -s build` (PASS)
+
+## 2026-04-15 - Trien khai tiep Phase 9 (My Bookings + Booking Detail management)
+- Can cu checklist Phase 9:
+  - Danh sach booking ca nhan co nhom waiting/upcoming/completed/canceled.
+  - Booking detail day du + action hop le + receipt/payment section + status badge nhat quan.
+- Da thuc hien:
+  - `frontend/src/features/booking/bookingPresentation.ts`
+    - Bo sung map variant cho status badge (booking/payment).
+    - Bo sung helper `isWaitingPaymentBooking`.
+  - `frontend/src/pages/customer/AccountPage.tsx`
+    - Them tab `Cho thanh toan` va group du lieu theo dung nghiep vu:
+      - waiting payment / upcoming / completed / canceled.
+    - Hien thong tin scan nhanh moi item:
+      - ma booking, ten san (+ venue neu co metadata), thoi gian, payment status.
+    - Dung `StatusBadge` nhat quan cho booking/payment.
+    - CTA theo context: Dat coc / Chi tiet / Xem lai.
+    - Nap metadata court+venue de hien thi ten san de doc hon.
+  - `frontend/src/pages/customer/BookingDetailPage.tsx`
+    - Hien thi thong tin booking + badge status nhat quan voi listing.
+    - Action theo rule va an/disable hop le:
+      - Huy, Dat coc, Doi lich, Xem trang thai thanh toan.
+    - Them xac nhan truoc thao tac huy (Modal).
+    - Them khu vuc bien nhan/payment:
+      - hien latest payment success
+      - tai bien nhan (file txt MVP)
+      - lien he ho tro
+      - lich su giao dich.
+  - `frontend/src/index.css`
+    - Bo sung style cho receipt/history box, action row, badge alignment.
+- Verify:
+  - `cmd /c npm run -s typecheck` (PASS)
+  - `cmd /c npm run -s build` (PASS)
+### 2026-04-15 - Frontend phase 8+9 validate va fix build
+- Yeu cau: Tiep tuc phase 8, bo sung UX checkout/payment va booking management, sau do verify build.
+- Muc dich: Hoan thien flow dat lich -> thanh toan -> quan ly booking theo checklist frontend.
+- Hanh dong:
+  - Fix TypeScript error trong `BookingDetailPage` (guard `booking` khi load court/venue metadata).
+  - Chay lai `npm run -s typecheck` va `npm run -s build` trong `frontend` deu pass.
+- File anh huong:
+  - `frontend/src/pages/customer/BookingDetailPage.tsx`
+  - `WORK_LOG.md`
+- Ghi chu: Build frontend on dinh sau khi bo sung Phase 8/9.
+### 2026-04-16 - Frontend Phase 10 (responsive + performance + kha nang dung that)
+- Yeu cau: Trien khai phase 10 va bam sat checklist trong phase nay.
+- Muc dich: Cai thien do muot tren du lieu lon, toi uu tai trang, va on dinh tra nghiem tren mobile/desktop.
+- Hanh dong:
+  - Toi uu tai trang theo route-level code splitting:
+    - `frontend/src/App.tsx` chuyen toan bo page sang `React.lazy` + `Suspense` fallback.
+    - Giam kich thuoc bundle ban dau va chi tai man hinh khi can.
+  - Toi uu hieu nang danh sach san:
+    - `frontend/src/pages/customer/DiscoverPage.tsx` bo dependency recompute du thua (`searchParams` object), thay bang `keyword` scalar.
+    - Them co che `visibleCount` + nut `Xem them` de tranh render toan bo card ngay tu dau.
+  - Toi uu hieu nang bang dat lich:
+    - `frontend/src/pages/customer/BookingGridPage.tsx` precompute `slotStatusesByCourt` bang `useMemo` (O(1) lookup cho moi o) thay vi scan booking lien tuc tren moi cell.
+  - Toi uu tai metadata chi tiet booking:
+    - `frontend/src/pages/customer/BookingDetailPage.tsx` doi load court metadata tu sequential sang `Promise.all` theo venue.
+  - Hardening responsive/usability trong CSS:
+    - `frontend/src/index.css`:
+      - `100dvh` cho screen, safe-area cho bottom nav.
+      - tap-target toi thieu 44px cho button/nav.
+      - sticky cot ten san trong timeline de ngang cuon van doc duoc.
+      - `content-visibility` cho card listing.
+      - `prefers-reduced-motion` de giam animation cho accessibility.
+      - them class `route-fallback`, `discover-load-more`.
+- Verify:
+  - `cmd /c npm run -s typecheck` (PASS)
+  - `cmd /c npm run -s build` (PASS, da chay ngoai sandbox de tranh loi EPERM spawn)
+### 2026-04-16 - Phase 10 validation package (responsive + performance + real-usage)
+- Yeu cau: Trien khai phase 10 theo checklist.
+- Muc dich: Co bo tieu chi test ro rang + gate hieu nang truoc release.
+- Hanh dong:
+  - Them script budget:
+    - `frontend/scripts/check-bundle-budget.mjs`
+    - budget mac dinh: entry js <= 260KB, total js <= 650KB, total css <= 40KB.
+  - Cap nhat npm scripts:
+    - `check:bundle`
+    - `phase10:verify` (= typecheck + build + check bundle)
+  - Tao tai lieu matrix phase 10:
+    - `docs/frontend-phase10-validation.md`
+    - bao gom matrix responsive, performance, real-usage va regression command.
+- File anh huong:
+  - `frontend/package.json`
+  - `frontend/scripts/check-bundle-budget.mjs`
+  - `docs/frontend-phase10-validation.md`
+  - `WORK_LOG.md`
+### 2026-04-16 - Phase 10 verify run
+- Chay `npm run -s phase10:verify` de verify gate phase 10.
+- Ket qua: PASS.
+  - Entry JS: 215.08 KB / 260 KB
+  - Total JS: 446.26 KB / 650 KB
+  - Total CSS: 26.88 KB / 40 KB
+- Ghi chu: trong sandbox bi `spawn EPERM`, da rerun ngoai sandbox va thanh cong.
+
+### 2026-04-16 - Huong admin page cho pricing rule
+- Yeu cau: Lam theo huong co trang admin de quan ly pricing rule thay vi thao tac tay trong DB.
+- Muc dich: Owner/Admin co UI tao va quan ly pricing rules de flow booking tinh gia hoat dong on dinh.
+- Hanh dong:
+  - Hoan thien route frontend cho trang pricing rule: `/ops/pricing-rules` (role OWNER/ADMIN).
+  - Them quick link `Pricing Rules` tren `OpsPortalPage`.
+  - Verify frontend qua `npm.cmd run -s typecheck` va `npm.cmd run -s build`.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/src/App.tsx`
+  - `frontend/src/pages/ops/OpsPortalPage.tsx`
+- Ghi chu: Trang `frontend/src/features/admin/PricingRuleManagementPage.tsx` da san sang de tao rule + baseline nhanh (weekday/weekend/fallback).
+
+### 2026-04-17 - Frontend phase 11 (API contract + mapper + error mapping)
+- Yeu cau: Thuc hien phase tiep theo trong checklist frontend.
+- Muc dich:
+  - Tach DTO backend khoi UI model de giam coupling.
+  - Chuan hoa thong diep loi booking/payment theo error contract.
+  - Chot danh sach field API con thieu can phoi hop backend.
+- Hanh dong:
+  - Them `frontend/src/lib/coreApiMapper.ts` de map du lieu Venue/Court/Booking/PricingRule/Payment.
+  - Refactor `frontend/src/lib/coreApi.ts` de map response truoc khi tra ve page/hook.
+  - Viet lai `frontend/src/lib/errorPresentation.ts` + them `frontend/src/lib/errorMessageCatalog.ts`:
+    - map loi UNAUTHORIZED/FORBIDDEN/VALIDATION va cac loi booking quan trong (slot het, no pricing rule, draft expired, payment fail).
+    - ho tro parse `details` dang array `{ field, message }`.
+  - Tao tai lieu phase 11: `docs/frontend-phase11-api-contract.md` (mapper strategy + API gap list).
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/src/lib/coreApiMapper.ts`
+  - `frontend/src/lib/coreApi.ts`
+  - `frontend/src/lib/errorPresentation.ts`
+  - `frontend/src/lib/errorMessageCatalog.ts`
+  - `docs/frontend-phase11-api-contract.md`
+
+### 2026-04-18 - UI/UX adaptation from `docs/Design.md` (checklist-safe)
+- Yeu cau: Tham khao style e-commerce trong `docs/Design.md` va ap dung vao frontend nhung khong xung dot checklist.
+- Muc dich: Nang cap visual hierarchy va tinh nhat quan UI ma van giu nguyen booking funnel hien tai.
+- Hanh dong:
+  - Cap nhat token theme trong `frontend/src/index.css` theo huong:
+    - CTA xanh duong (`#0064E0`) + state hover dam hon.
+    - Surface trang/xam nhat, border divider nhat quan.
+    - Shadow mem theo kieu card retail.
+  - Chuan hoa style component:
+    - Button/pill radius lon (pill-shape), card radius lon hon.
+    - Header/hero toi uu hierarchy (dark-to-blue gradient).
+    - Discover toolbar/card/summary chuyen sang visual retail sach hon.
+    - Checkout/payment/account surfaces theo cung he token.
+  - Bo sung section `SportCourt adaptation` trong `docs/Design.md`:
+    - neu item nao xung dot checklist thi bo qua.
+    - giu nguyen flow booking/payment khong tang friction.
+- File anh huong:
+  - `WORK_LOG.md`
+  - `docs/Design.md`
+  - `frontend/src/index.css`
+
+### 2026-04-18 - Refine UI man hinh booking/payment theo Design.md (checklist-safe)
+- Yeu cau: Tiep tuc tinh chinh chi tiet 4 man hinh chinh (Discover -> Booking Grid -> Checkout -> Payment) theo huong design tham khao, khong doi flow nghiep vu.
+- Muc dich:
+  - Tang do ro visual hierarchy va tinh nhat quan giua cac man.
+  - Van giu nguyen funnel booking/payment theo checklist.
+- Hanh dong:
+  - `frontend/src/pages/customer/DiscoverPage.tsx`
+    - Them header ket qua (`discover-results-head`) gom tong so san + CTA uu dai.
+  - `frontend/src/pages/customer/BookingGridPage.tsx`
+    - Them chip ngay o topbar (`booking-grid-date-chip`).
+    - Them link hanh dong `Xem san & bang gia` trong legend (toast thong bao phase admin pricing).
+  - `frontend/src/pages/customer/BookingCheckoutPage.tsx`
+    - Them note cho khu payment method preview.
+    - Tach CTA duoi thanh `checkout-footer` dang sticky de thao tac de hon.
+  - `frontend/src/pages/customer/PaymentPage.tsx`
+    - Them box nhan manh countdown giu cho (`payment-summary-highlight`).
+  - `frontend/src/index.css`
+    - Chuan hoa visual cho 4 man: card radius/shadow, heading, toolbar, legend, checkout/payment sections.
+    - Bo sung style cho cac class moi: `discover-results-head`, `booking-grid-date-chip`, `checkout-method-note`, `checkout-footer`, `payment-summary-highlight`.
+- Verify:
+  - `npm run -s typecheck` (PASS)
+  - `npm run -s build` (PASS)
+- File anh huong:
+  - `WORK_LOG.md`
+  - `frontend/src/index.css`
+  - `frontend/src/pages/customer/DiscoverPage.tsx`
+  - `frontend/src/pages/customer/BookingGridPage.tsx`
+  - `frontend/src/pages/customer/BookingCheckoutPage.tsx`
+  - `frontend/src/pages/customer/PaymentPage.tsx`
+
+### 2026-04-19 - Hardening pricing fallback + tinh chinh admin dashboard
+- Yeu cau: Vua hardening backend pricing de tranh no-rule trong flow dat lich, vua nang cap trang admin dashboard de theo doi do phu pricing rule theo tung san.
+- Muc dich:
+  - Giu flow dat lich chay on dinh ngay ca khi thieu rule chi tiet.
+  - Giup owner/admin nhin nhanh san nao chua co pricing va xu ly ngay trong dashboard.
+- Hanh dong backend (`core-service`):
+  - `services/core-service/src/main/java/com/sportcourt/core/service/PricingService.java`
+    - Them `app.pricing.default-hourly-rate` lam fallback rate theo slot khi khong match rule.
+    - Bo sung validate overlap rule theo scope (dayType/customerTier) + quy tac priority (specific > broad).
+  - `services/core-service/src/main/resources/application.yml`
+    - Dat `app.pricing.default-hourly-rate: 100000` (default local env).
+  - `services/core-service/src/test/resources/application-test.yml`
+    - Dat `app.pricing.default-hourly-rate: 0` de giu behavior test reject khi no-rule.
+  - `services/core-service/src/test/java/com/sportcourt/core/service/PricingServiceIntegrationTest.java`
+    - Them test overlap + test fallback priority.
+- Hanh dong frontend (`ops`):
+  - `frontend/src/pages/ops/OpsPortalPage.tsx`
+    - Nap so luong pricing rule theo tung court.
+    - Them KPI `Pricing Coverage`, `San thieu pricing`.
+    - Them block `Tinh trang pricing rule theo san` + canh bao inline.
+  - `frontend/src/index.css`
+    - Tinh chinh style KPI/toast/layout cho Ops dashboard.
+- Verify:
+  - `services/core-service`: `mvn "-Dmaven.repo.local=.m2repo" "-Dtest=PricingServiceIntegrationTest" test -q` (PASS)
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run -s build` (PASS)
+
+### 2026-04-19 - Dieu chinh phan quyen frontend cho khu vuc Ops
+- Yeu cau: Trang dashboard van hanh san chi cho `ADMIN/OWNER/STAFF`; trang quan ly nguoi dung chi `ADMIN`.
+- Hanh dong:
+  - `frontend/src/App.tsx`
+    - Cap nhat route guard `/ops` bo role `SUPPORT`.
+    - Cap nhat route guard `/ops/notifications` bo role `SUPPORT`.
+    - Route `/ops/admin/users` da san chi `ADMIN` (giu nguyen).
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+
+### 2026-04-19 - Tinh chinh Ops dashboard theo phong cach Materio
+- Yeu cau: Tham khao UI trong `docs/materio-1.0.0` de nang cap dashboard van hanh san, van giu nguyen nghiep vu va API hien tai.
+- Hanh dong:
+  - `frontend/src/pages/ops/OpsPortalPage.tsx`
+    - Refactor header thanh hero card 2 cot (tong quan + thong tin nhanh venue/date/peak hour).
+    - Bo sung thanh quick links theo style dashboard.
+    - Nâng KPI card theo phong cach stat chip (bookings/hours/revenue/add-on/pricing coverage).
+    - Them block insight/canh bao van hanh.
+    - Format lai danh sach pricing theo tung san dang row label/value.
+  - `frontend/src/index.css`
+    - Bo sung class UI cho `ops-header-card`, `kpi-chip`, `ops-insight-grid`, `ops-pricing-row`.
+    - Tinh chinh responsive cho header card va spacing theo man hinh nho.
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run -s build` (PASS)
+
+### 2026-04-19 - Ap dung layout dashboard ben trai theo Materio cho /ops/*
+- Yeu cau: Bam sat layout Materio cho cac trang dashboard (menu ben trai + topbar), thay vi moi page mot kieu.
+- Hanh dong:
+  - Tao layout moi: `frontend/src/layouts/OpsDashboardLayout.tsx`
+    - Sidebar ben trai gom menu Dashboard / Notifications / Pricing Rules / User Management / DLQ.
+    - Hien menu theo role (`ADMIN`, `OWNER`, `STAFF`) va role-rieng cho route con.
+    - Topbar phia tren + nut dang xuat.
+  - Cap nhat router `frontend/src/App.tsx`
+    - Chuyen `/ops/*` sang nested routes voi layout chung.
+    - Giu guard:
+      - `/ops` + `/ops/notifications`: `ADMIN|OWNER|STAFF`
+      - `/ops/pricing-rules`: `ADMIN|OWNER`
+      - `/ops/admin/users`: `ADMIN`
+      - `/ops/dlq`: `ADMIN`
+  - Cap nhat style `frontend/src/index.css`
+    - Them nhom class layout: `ops-dashboard-layout`, `ops-sidebar`, `ops-topbar`, `ops-page-slot`.
+    - Responsive cho man hinh hep.
+  - Don cac link "Ve Ops Portal" trong page con (do da co sidebar dieu huong).
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run -s build` (PASS)
+
+### 2026-04-19 - Fix lỗi font/encoding tiếng Việt ở trang Pricing Rules
+- Vấn đề: `frontend/src/features/admin/PricingRuleManagementPage.tsx` hiển thị chữ tiếng Việt bị lỗi mã hóa (mojibake).
+- Hành động:
+  - Chuẩn hóa toàn bộ text UI tiếng Việt trong trang Pricing Rules (title, label, placeholder, error message, empty state).
+  - Giữ nguyên logic nghiệp vụ và API call, chỉ sửa nội dung hiển thị.
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+
+### 2026-04-22 - Stabilization gate truoc khi sang phase moi
+- Yeu cau: Thuc hien 4 buoc theo thu tu: fix bug UI mo -> verify frontend -> smoke E2E gateway -> chot release gate.
+- Muc dich:
+  - On dinh UI/UX va xac nhan tinh san sang merge/release theo checklist.
+- Hanh dong:
+  - Sua bug mo:
+    - `frontend/src/context/AuthContext.tsx`
+      - Them backward-compatibility khi doc token localStorage (ho tro format cu co nested `data`), tranh hien thi sai trang thai dang nhap.
+    - `frontend/src/index.css`
+      - Chinh lai `landing-search-grid` theo container query moi (`760px`, `500px`) de tranh de ngay/gio bi chong tren landing quick search.
+      - Cung co style CTA trong `landing-actions` de nut hien thi ro va dung canh tren hero.
+  - Verify frontend:
+    - `npm.cmd run -s typecheck` (PASS)
+    - `npm.cmd run -s build` (PASS)
+    - `npm.cmd run -s phase10:verify` (PASS, bundle budget pass)
+  - Smoke E2E gateway/core/payment:
+    - Chay script `powershell -ExecutionPolicy Bypass -File scripts/e2e-gateway-core-payment.ps1`.
+    - Ket qua: FAIL do health check `api-gateway` timeout (khong co service nao dang UP tren localhost:8080/8081/8082/8083).
+    - Kiem tra ha tang: `docker info` fail ket noi daemon (`dockerDesktopLinuxEngine`), nen chua the run stack de test E2E.
+
+### 2026-04-23 - Trien khai buoc tiep theo plan (Phase 12: funnel analytics)
+- Yeu cau: Tiep tuc buoc tiep theo sau stabilization gate.
+- Muc dich:
+  - Bat dau phase 12 theo de xuat sau phase 11: theo doi funnel booking/payment bang analytics co cau truc.
+  - Chuan bi du lieu do luong conversion ma khong doi nghiep vu backend.
+- Hanh dong:
+  - Tao analytics utility:
+    - `frontend/src/lib/analytics.ts`
+    - Cung cap `trackEvent(event, payload)` -> push vao `window.dataLayer` va emit `sportcourt:analytics`.
+  - Gan event vao cac man funnel:
+    - `frontend/src/pages/LandingPage.tsx`
+      - submit search, click explore/auth CTA, click quick-link.
+    - `frontend/src/pages/customer/DiscoverPage.tsx`
+      - click dat lich, clear filters, click map.
+    - `frontend/src/pages/customer/BookingGridPage.tsx`
+      - chon range slot, tiep tuc checkout, xoa selection.
+    - `frontend/src/pages/customer/BookingCheckoutPage.tsx`
+      - view checkout, redirect login neu chua auth, tao draft success/fail.
+    - `frontend/src/pages/customer/PaymentPage.tsx`
+      - view payment, booking/payment status update, initiate payment success/fail, simulate callback success/fail, payment success milestone.
+  - Them tai lieu phase 12:
+    - `docs/frontend-phase12-funnel-analytics.md`
+    - Liet ke event matrix + smoke validation manual.
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run -s build` (PASS)
+
+### 2026-04-23 - Hoan thien Phase 12 (smoke test automation + CI gate)
+- Yeu cau: Tiep tuc buoc dang lam do khi stream bi ngat, hoan tat phase 12 theo plan.
+- Muc dich:
+  - Chuyen smoke test funnel tu manual sang tu dong, chay on dinh local va CI.
+  - Dong bo tai lieu phase 12 de de van hanh va handover.
+- Hanh dong:
+  - Cap nhat Playwright E2E:
+    - `frontend/tests/funnel-smoke.spec.ts`
+      - seed du lieu theo venue/court/pricing rule that.
+      - probe slot hop le qua `pricing/quote` + `availability`.
+      - retry loop khi slot bi race condition trong luc chuyen grid -> checkout -> payment.
+      - assert du event analytics trong `window.dataLayer`.
+    - `frontend/src/pages/customer/DiscoverPage.tsx`
+      - bo sung `data-court-id`/`data-venue-id` de E2E target card on dinh.
+    - `frontend/src/lib/coreApi.ts` + `frontend/src/lib/appConfig.ts`
+      - them header `X-Payment-Callback-Secret` cho callback simulate tu frontend test flow.
+  - Them CI gate cho frontend smoke:
+    - `.github/workflows/frontend-ci.yml`
+      - job moi `phase12-funnel-smoke`:
+        1) build/start docker compose stack,
+        2) wait gateway health,
+        3) chay `npm run phase12:smoke`,
+        4) dump logs neu fail.
+  - Viet lai tai lieu phase 12:
+    - `docs/frontend-phase12-funnel-analytics.md`
+      - event matrix,
+      - local run,
+      - CI run,
+      - luu y idempotency va payload an toan.
+- Verify:
+  - `frontend`: `cmd /c npm run -s phase12:smoke` (PASS, 1 test passed)
+
+### 2026-04-23 - Trien khai phase tiep theo (Phase 13: Discover live insights)
+- Yeu cau: Tiep tuc phase tiep theo theo plan frontend.
+- Muc dich:
+  - Bo du lieu gia lap tren Discover, uu tien hien thi thong tin live theo khung gio user dang tim.
+  - Dong bo UI card voi nghiep vu backend (availability/quote theo slot).
+- Hanh dong:
+  - `frontend/src/pages/customer/DiscoverPage.tsx`
+    - Bo sung `CardInsight` state theo `courtId` gom:
+      - `availability` (boolean | null)
+      - `quote` (number | null)
+    - Fetch live availability cho `visibleCards` qua `checkAvailability(...)`.
+    - Fetch live quote auth-aware qua `quoteBooking(...)`:
+      - user da dang nhap: goi quote API.
+      - user chua dang nhap: khong goi quote, hien message "Dang nhap de xem gia".
+    - Update logic filter/sort:
+      - filter gia dua tren quote live.
+      - sort PRICE_LOW va AVAILABILITY dua tren du lieu live.
+    - Hien thi card status moi:
+      - Con cho / Da kin / Dang cap nhat.
+      - Gia: Tu ... / Chua co bang gia / Dang nhap de xem gia.
+    - Summary "Goi y dat coc" tinh theo quote dau tien co du lieu.
+  - Them tai lieu:
+    - `docs/frontend-phase13-discover-live-insights.md`
+- Verify:
+  - `frontend`: `cmd /c npm run -s typecheck` (PASS)
+  - `frontend`: `cmd /c npm run -s build` (PASS)
+  - `frontend`: `cmd /c npm run -s phase12:smoke` (PASS)
+
+### 2026-04-23 - Chinh lai theo checklist: doi ten tai lieu va tiep tuc Phase 6
+- Yeu cau: tiep tuc buoc dang lam do theo thu tu da chot (Phase 5 -> 6 -> 11 -> 12).
+- Muc dich:
+  - Dong bo ten phase voi checklist goc (khong dung "Phase 13").
+  - Hoan thien booking interaction o Venue Detail theo huong realtime.
+- Hanh dong:
+  - Tai lieu:
+    - Doi/chuẩn hoa noi dung `docs/frontend-phase4-discover-live-insights.md`
+      - title + pham vi dung voi Phase 4.
+      - cap nhat mo ta live availability/live quote.
+  - UI booking:
+    - `frontend/src/pages/customer/VenueDetailPage.tsx`
+      - bo dependency du thua khi load venue/courts (`selectedCourtId`) de tranh refetch thua.
+      - them auto-refresh availability moi 15s.
+      - them refresh khi tab tro lai foreground (`visibilitychange`).
+      - bo sung quick action "Hom nay" va note legend "tu dong dong bo moi 15 giay".
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run -s build` (PASS)
+
+### 2026-04-23 - Hoan thien phan con lai cua Phase 12 (QA/DoD tai lieu)
+- Yeu cau: tiep tuc theo thu tu checklist, chot phan QA analytics truoc release.
+- Muc dich:
+  - Co checklist QA tay ro rang truoc merge/release.
+  - Co mau pre-release review va Definition of Done thong nhat cho team.
+- Hanh dong:
+  - Them tai lieu:
+    - `docs/frontend-phase12-qa-manual-checklist.md`
+    - `docs/frontend-pre-release-review.md`
+    - `docs/frontend-definition-of-done.md`
+  - Cap nhat `docs/frontend-phase12-funnel-analytics.md`:
+    - bo sung section tham chieu 3 tai lieu tren de chot phase 12.
+
+
+### 2026-04-27 - Re-run phase12 smoke after Docker is up
+- Yeu cau: user da mo Docker Desktop, tiep tuc verify smoke.
+- Muc dich:
+  - Xac nhan frontend funnel smoke chay duoc voi stack docker dang online.
+  - Sua test drift do flow Discover moi di qua Venue Detail truoc khi vao Booking Grid.
+- Hanh dong:
+  - Kiem tra Docker daemon:
+    - `docker info --format '{{.ServerVersion}}'` -> `29.1.3`.
+  - Chay smoke:
+    - `frontend`: `npm.cmd run phase12:smoke` (FAIL lan 1).
+  - Sua test script:
+    - `frontend/tests/funnel-smoke.spec.ts`
+      - Sau khi bam CTA o Discover, doi URL `/venues/:id`.
+      - Bam nut "Chuyen sang bang dat nang cao" de vao `/booking/grid`.
+  - Chay lai smoke:
+    - `frontend`: `npm.cmd run phase12:smoke` (PASS).
+- Ket qua:
+  - Test da PASS, khong con mismatch route voi flow UI hien tai.
+
+### 2026-04-27 - Step 1: Chot API contract + fallback pricing/error
+- Yeu cau: uu tien best practice tiep theo theo thu tu (buoc 1).
+- Muc dich:
+  - Loai bo viec UI phu thuoc message text mong manh khi quote fail.
+  - Chuan hoa ma loi nghiep vu de frontend xu ly on dinh.
+  - Chan checkout khi khung gio chua co pricing rule.
+- Hanh dong:
+  - Backend (`core-service`):
+    - Them `BusinessException` de tra ve `status + code + details` co cau truc.
+    - Cap nhat `GlobalExceptionHandler` xu ly `BusinessException`.
+    - Cap nhat `PricingService`:
+      - Khi thieu rule, tra `PRICING_RULE_MISSING` (HTTP 422).
+      - Bo sung detail `missingSlotStart` de debug/ho tro.
+  - Frontend:
+    - Chuan hoa lai `frontend/src/lib/errorMessageCatalog.ts` (bo text loi bi vo encoding, them map code `PRICING_RULE_MISSING`).
+    - Chuan hoa fallback string trong `frontend/src/lib/errorPresentation.ts`.
+    - Cap nhat `frontend/src/pages/customer/BookingCheckoutPage.tsx`:
+      - Tach xu ly `availability` va `quote` bang `Promise.allSettled`.
+      - Neu quote fail do thieu pricing rule: hien thong bao than thien + disable CTA.
+      - Khong tao draft voi `priceTotal=0` khi chua co bao gia.
+  - Tai lieu:
+    - Cap nhat `docs/api-error-contract.md` bo sung vi du `PRICING_RULE_MISSING`.
+- Verify:
+  - `services/core-service`: `mvn "-Dmaven.repo.local=.m2repo" -DskipTests compile -q` (PASS)
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run phase12:smoke` (PASS)
+
+### 2026-04-27 - Step 2: Route guard theo role (frontend)
+- Yeu cau: lam tiep buoc 2 theo thu tu (role-based routing truoc khi goi API).
+- Muc dich:
+  - Dong bo rule route frontend voi policy gateway.
+  - Tranh user vao trang khong co quyen roi moi gap 403.
+- Hanh dong:
+  - Them policy role tap trung:
+    - `frontend/src/app/routeRolePolicy.ts`
+    - gom nhom role cho booking, ops dashboard, notifications, pricing, admin users, dlq.
+  - Ap dung policy vao route guard:
+    - `frontend/src/App.tsx`
+      - route booking dung chung `CUSTOMER_BOOKING_ROLES`.
+      - `/ops` chi cho `ADMIN/OWNER/STAFF`.
+      - child routes notifications/pricing/admin-users/dlq dung role policy tuong ung.
+  - An nhanh cac link khong du quyen trong ops portal:
+    - `frontend/src/pages/ops/OpsPortalPage.tsx`
+      - filter quick links theo `hasAnyRole(...)`.
+  - Dong bo menu sidebar ops voi role policy:
+    - `frontend/src/layouts/OpsDashboardLayout.tsx`.
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run phase12:smoke` (PASS)
+### 2026-04-28 - Step 4: UX polish (sửa lỗi tiếng Việt bị vỡ ở Venue Detail)
+- Yêu cầu: tiếp tục theo thứ tự best-practice đang làm dở.
+- Mục đích:
+  - Loại bỏ toàn bộ text bị lỗi encoding trên màn `VenueDetailPage`.
+  - Đảm bảo thông điệp UX rõ ràng cho flow chọn sân/chọn khung giờ.
+- Hành động:
+  - Cập nhật `frontend/src/pages/customer/VenueDetailPage.tsx`:
+    - Sửa các label/message/toast bị mojibake thành tiếng Việt chuẩn (ví dụ: "Không tải được lịch trống", "Khung giờ không khả dụng", "Đã chọn khung giờ", "Tiếp tục thanh toán"...).
+    - Sửa chuỗi tiêu đề/tips/chính sách/legend và tooltip timeline.
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run -s lint` (PASS)
+### 2026-04-28 - Step 4 tiep tuc: ra soat text encoding va regression gate
+- Yeu cau: tiep tuc buoc UX polish + chot regression smoke.
+- Muc dich:
+  - Dam bao text tieng Viet tren funnel booking/payment khong bi vo encoding.
+  - Re-check regression sau khi sua.
+- Hanh dong:
+  - `frontend/src/pages/customer/VenueDetailPage.tsx`
+    - Sua toan bo chuoi mojibake thanh tieng Viet dung (title, toast, policy, summary, labels, button).
+    - Sua ky tu back-link tu chuoi loi `â†` thanh `←`.
+  - Quet lai frontend de tim chuoi nghi mojibake (`rg` theo mau `Ã|Â|Ä|...`).
+- Verify:
+  - `frontend`: `npm.cmd run -s typecheck` (PASS)
+  - `frontend`: `npm.cmd run -s lint` (PASS)
+  - `frontend`: `npm.cmd run phase12:smoke` (FAIL do env chua san sang: `ECONNREFUSED localhost:8080`)
+  - Kiem tra nhanh health: `http://localhost:8080/actuator/health` khong ket noi duoc.

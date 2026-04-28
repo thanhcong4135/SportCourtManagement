@@ -1,4 +1,15 @@
 ﻿import { apiFetch, createIdempotencyKey, toIsoWithOffset } from "./api";
+import { appConfig } from "./appConfig";
+import {
+  mapBatchBookingActionResponse,
+  mapBooking,
+  mapBookingPage,
+  mapCourt,
+  mapPaymentTransaction,
+  mapPricingQuote,
+  mapPricingRule,
+  mapVenue,
+} from "./coreApiMapper";
 
 export type Venue = {
   id: string;
@@ -51,6 +62,35 @@ export type PricingQuote = {
   totalPrice: number;
 };
 
+export type PricingDayType = "ALL" | "WEEKDAY" | "WEEKEND";
+export type PricingRuleCustomerTier = "ALL" | "STANDARD" | "MEMBER" | "VIP";
+
+export type PricingRule = {
+  id: string;
+  courtId: string;
+  name: string;
+  dayType: PricingDayType;
+  startTime: string;
+  endTime: string;
+  customerTier: PricingRuleCustomerTier;
+  pricePerHour: number;
+  priority: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreatePricingRulePayload = {
+  courtId: string;
+  name: string;
+  dayType: PricingDayType;
+  startTime: string;
+  endTime: string;
+  customerTier: PricingRuleCustomerTier;
+  pricePerHour: number;
+  priority?: number;
+};
+
 export type CreateDraftPayload = {
   courtId: string;
   startTime: string;
@@ -99,11 +139,13 @@ export type PaymentTransaction = {
 };
 
 export async function listVenues() {
-  return apiFetch<Venue[]>("/api/core/venues");
+  const response = await apiFetch<unknown[]>("/api/core/venues");
+  return response.map((item) => mapVenue(item) as Venue);
 }
 
 export async function listCourts(venueId: string) {
-  return apiFetch<Court[]>(`/api/core/courts?venueId=${venueId}`);
+  const response = await apiFetch<unknown[]>(`/api/core/courts?venueId=${venueId}`);
+  return response.map((item) => mapCourt(item) as Court);
 }
 
 export async function listProducts(venueId: string, activeOnly = true) {
@@ -131,11 +173,13 @@ export async function listBookings(
   }
   search.set("page", String(params.page ?? 0));
   search.set("size", String(params.size ?? 20));
-  return apiFetch<BookingPage>(`/api/core/bookings?${search.toString()}`);
+  const response = await apiFetch<unknown>(`/api/core/bookings?${search.toString()}`);
+  return mapBookingPage(response) as BookingPage;
 }
 
 export async function getBookingById(bookingId: string) {
-  return apiFetch<Booking>(`/api/core/bookings/${bookingId}`);
+  const response = await apiFetch<unknown>(`/api/core/bookings/${bookingId}`);
+  return mapBooking(response) as Booking;
 }
 
 export async function checkAvailability(courtId: string, startIso: string, endIso: string) {
@@ -147,13 +191,34 @@ export async function checkAvailability(courtId: string, startIso: string, endIs
 export async function quoteBooking(courtId: string, startIso: string, endIso: string) {
   const start = encodeURIComponent(startIso);
   const end = encodeURIComponent(endIso);
-  return apiFetch<PricingQuote>(
+  const response = await apiFetch<unknown>(
     `/api/core/pricing/quote?courtId=${courtId}&start=${start}&end=${end}&customerTier=STANDARD`,
   );
+  return mapPricingQuote(response) as PricingQuote;
+}
+
+export async function listPricingRules(courtId?: string) {
+  const query = courtId ? `?courtId=${courtId}` : "";
+  const response = await apiFetch<unknown[]>(`/api/core/pricing-rules${query}`);
+  return response.map((item) => mapPricingRule(item) as PricingRule);
+}
+
+export async function createPricingRule(payload: CreatePricingRulePayload, idempotencyKey?: string) {
+  const response = await apiFetch<unknown>(
+    "/api/core/pricing-rules",
+    {
+      method: "POST",
+      headers: {
+        "Idempotency-Key": idempotencyKey || createIdempotencyKey("pricing-rule-create"),
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+  return mapPricingRule(response) as PricingRule;
 }
 
 export async function createBookingDraft(payload: CreateDraftPayload, idempotencyKey?: string) {
-  return apiFetch<Booking>(
+  const response = await apiFetch<unknown>(
     "/api/core/bookings/draft",
     {
       method: "POST",
@@ -163,10 +228,11 @@ export async function createBookingDraft(payload: CreateDraftPayload, idempotenc
       body: JSON.stringify(payload),
     },
   );
+  return mapBooking(response) as Booking;
 }
 
 export async function createBookingDraftBatch(payload: BatchBookingDraftPayload, idempotencyKey?: string) {
-  return apiFetch<BatchBookingActionResponse>(
+  const response = await apiFetch<unknown>(
     "/api/core/bookings/draft/batch",
     {
       method: "POST",
@@ -176,10 +242,11 @@ export async function createBookingDraftBatch(payload: BatchBookingDraftPayload,
       body: JSON.stringify(payload),
     },
   );
+  return mapBatchBookingActionResponse(response) as BatchBookingActionResponse;
 }
 
 export async function depositBooking(bookingId: string, amount: number, idempotencyKey?: string) {
-  return apiFetch<Booking>(
+  const response = await apiFetch<unknown>(
     `/api/core/bookings/${bookingId}/deposit`,
     {
       method: "POST",
@@ -189,10 +256,11 @@ export async function depositBooking(bookingId: string, amount: number, idempote
       body: JSON.stringify({ amount }),
     },
   );
+  return mapBooking(response) as Booking;
 }
 
 export async function depositBookingBatch(payload: BatchDepositPayload, idempotencyKey?: string) {
-  return apiFetch<BatchBookingActionResponse>(
+  const response = await apiFetch<unknown>(
     "/api/core/bookings/deposit/batch",
     {
       method: "POST",
@@ -202,10 +270,11 @@ export async function depositBookingBatch(payload: BatchDepositPayload, idempote
       body: JSON.stringify(payload),
     },
   );
+  return mapBatchBookingActionResponse(response) as BatchBookingActionResponse;
 }
 
 export async function confirmBooking(bookingId: string, idempotencyKey?: string) {
-  return apiFetch<Booking>(
+  const response = await apiFetch<unknown>(
     `/api/core/bookings/${bookingId}/confirm`,
     {
       method: "POST",
@@ -214,10 +283,11 @@ export async function confirmBooking(bookingId: string, idempotencyKey?: string)
       },
     },
   );
+  return mapBooking(response) as Booking;
 }
 
 export async function confirmBookingBatch(payload: BatchConfirmPayload, idempotencyKey?: string) {
-  return apiFetch<BatchBookingActionResponse>(
+  const response = await apiFetch<unknown>(
     "/api/core/bookings/confirm/batch",
     {
       method: "POST",
@@ -227,10 +297,11 @@ export async function confirmBookingBatch(payload: BatchConfirmPayload, idempote
       body: JSON.stringify(payload),
     },
   );
+  return mapBatchBookingActionResponse(response) as BatchBookingActionResponse;
 }
 
 export async function cancelBooking(bookingId: string, idempotencyKey?: string) {
-  return apiFetch<Booking>(
+  const response = await apiFetch<unknown>(
     `/api/core/bookings/${bookingId}/cancel`,
     {
       method: "POST",
@@ -239,6 +310,7 @@ export async function cancelBooking(bookingId: string, idempotencyKey?: string) 
       },
     },
   );
+  return mapBooking(response) as Booking;
 }
 
 export async function rescheduleBooking(
@@ -246,7 +318,7 @@ export async function rescheduleBooking(
   payload: { courtId?: string; startTime: string; endTime: string; priceTotal?: number },
   idempotencyKey?: string,
 ) {
-  return apiFetch<Booking>(
+  const response = await apiFetch<unknown>(
     `/api/core/bookings/${bookingId}/reschedule`,
     {
       method: "POST",
@@ -256,6 +328,7 @@ export async function rescheduleBooking(
       body: JSON.stringify(payload),
     },
   );
+  return mapBooking(response) as Booking;
 }
 
 export async function createOrder(payload: {
@@ -282,7 +355,7 @@ export async function initiateDepositPayment(payload: {
   currency?: string;
   idempotencyKey?: string;
 }) {
-  return apiFetch<PaymentTransaction>(
+  const response = await apiFetch<unknown>(
     "/api/payments/deposits/initiate",
     {
       method: "POST",
@@ -295,14 +368,17 @@ export async function initiateDepositPayment(payload: {
       }),
     },
   );
+  return mapPaymentTransaction(response) as PaymentTransaction;
 }
 
 export async function listPaymentByBooking(bookingId: string) {
-  return apiFetch<PaymentTransaction[]>(`/api/payments/booking/${bookingId}`);
+  const response = await apiFetch<unknown[]>(`/api/payments/booking/${bookingId}`);
+  return response.map((item) => mapPaymentTransaction(item) as PaymentTransaction);
 }
 
 export async function getPaymentById(paymentId: string) {
-  return apiFetch<PaymentTransaction>(`/api/payments/${paymentId}`);
+  const response = await apiFetch<unknown>(`/api/payments/${paymentId}`);
+  return mapPaymentTransaction(response) as PaymentTransaction;
 }
 
 export async function applyPaymentCallback(payload: {
@@ -311,13 +387,20 @@ export async function applyPaymentCallback(payload: {
   success: boolean;
   failureReason?: string;
 }) {
-  return apiFetch<PaymentTransaction>(
+  const headers: Record<string, string> = {};
+  if (appConfig.paymentCallbackSecret) {
+    headers["X-Payment-Callback-Secret"] = appConfig.paymentCallbackSecret;
+  }
+
+  const response = await apiFetch<unknown>(
     "/api/payments/callback",
     {
       method: "POST",
+      headers,
       body: JSON.stringify(payload),
     },
   );
+  return mapPaymentTransaction(response) as PaymentTransaction;
 }
 
 export function buildOffsetIso(date: string, time: string): string {
@@ -339,3 +422,4 @@ export function toLocalDateTime(iso: string): string {
   const mm = String(date.getMinutes()).padStart(2, "0");
   return `${d}/${m}/${y} ${hh}:${mm}`;
 }
+

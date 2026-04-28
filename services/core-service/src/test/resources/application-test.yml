@@ -35,6 +35,8 @@ kafka:
 app:
   scheduling:
     enabled: false
+  pricing:
+    default-hourly-rate: 0
   time:
     response-zone: Asia/Ho_Chi_Minh
   security:

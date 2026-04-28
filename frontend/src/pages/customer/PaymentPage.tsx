@@ -1,7 +1,7 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BottomNavigation } from "../../components/BottomNavigation";
 import { useAuth } from "../../context/AuthContext";
+import { trackEvent } from "../../lib/analytics";
 import { createIdempotencyKey, formatCurrency } from "../../lib/api";
 import { toErrorPresentation } from "../../lib/errorPresentation";
 import {
@@ -38,6 +38,30 @@ function mapPaymentStatusLabel(status: string) {
   }
 }
 
+type PaymentMethodKey = "BANK_QR" | "MOMO_QR";
+
+type PaymentMethodOption = {
+  key: PaymentMethodKey;
+  label: string;
+  description: string;
+  available: boolean;
+};
+
+const paymentMethods: PaymentMethodOption[] = [
+  {
+    key: "BANK_QR",
+    label: "Chuyển khoản QR ngân hàng",
+    description: "Mặc định cho MVP. Xác nhận qua callback payment-service.",
+    available: true,
+  },
+  {
+    key: "MOMO_QR",
+    label: "Ví điện tử QR",
+    description: "Sẵn sàng cho mở rộng, dùng chung flow initiate/polling hiện tại.",
+    available: true,
+  },
+];
+
 export function PaymentPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
@@ -46,22 +70,30 @@ export function PaymentPage() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [payments, setPayments] = useState<PaymentTransaction[]>([]);
   const [activePaymentId, setActivePaymentId] = useState<string>("");
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethodKey>("BANK_QR");
   const [countdown, setCountdown] = useState("--:--");
   const [error, setError] = useState<string | null>(null);
   const [traceId, setTraceId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const lastTrackedStatusRef = useRef<string>("");
+  const successTrackedRef = useRef(false);
+
+  const sortedPayments = useMemo(
+    () => [...payments].sort((left, right) => new Date(right.requestedAt).getTime() - new Date(left.requestedAt).getTime()),
+    [payments],
+  );
 
   const activePayment = useMemo(() => {
     if (activePaymentId) {
-      return payments.find((item) => item.id === activePaymentId) ?? null;
+      return sortedPayments.find((item) => item.id === activePaymentId) ?? null;
     }
-    return payments[0] ?? null;
-  }, [activePaymentId, payments]);
+    return sortedPayments[0] ?? null;
+  }, [activePaymentId, sortedPayments]);
 
   const latestSuccessPayment = useMemo(() => {
-    return payments.find((payment) => payment.status === "SUCCESS") ?? null;
-  }, [payments]);
+    return sortedPayments.find((payment) => payment.status === "SUCCESS") ?? null;
+  }, [sortedPayments]);
 
   const canInitiate = Boolean(
     booking
@@ -69,6 +101,58 @@ export function PaymentPage() {
       && booking.paymentStatus !== "DEPOSITED"
       && booking.paymentStatus !== "PAID",
   );
+
+  const isPendingConfirmation = Boolean(
+    booking
+      && activePayment
+      && activePayment.status === "PENDING"
+      && booking.paymentStatus === "UNPAID",
+  );
+
+  const isPaymentSuccess = Boolean(
+    booking
+      && (booking.paymentStatus === "DEPOSITED" || booking.paymentStatus === "PAID" || latestSuccessPayment),
+  );
+
+  const isPaymentFailed = Boolean(
+    booking
+      && (
+        booking.paymentStatus === "FAILED"
+        || activePayment?.status === "FAILED"
+        || activePayment?.status === "CANCELED"
+      ),
+  );
+
+  useEffect(() => {
+    if (!booking || !bookingId) {
+      return;
+    }
+
+    const marker = `${booking.status}|${booking.paymentStatus}`;
+    if (marker === lastTrackedStatusRef.current) {
+      return;
+    }
+
+    lastTrackedStatusRef.current = marker;
+    trackEvent("funnel_payment_booking_status", {
+      bookingId,
+      bookingStatus: booking.status,
+      paymentStatus: booking.paymentStatus,
+    });
+  }, [booking, bookingId]);
+
+  useEffect(() => {
+    if (!bookingId) {
+      return;
+    }
+    if (isPaymentSuccess && !successTrackedRef.current) {
+      successTrackedRef.current = true;
+      trackEvent("funnel_payment_success", { bookingId });
+    }
+    if (!isPaymentSuccess) {
+      successTrackedRef.current = false;
+    }
+  }, [bookingId, isPaymentSuccess]);
 
   const loadState = useCallback(async (currentBookingId: string) => {
     const [bookingRow, paymentRows] = await Promise.all([
@@ -103,6 +187,13 @@ export function PaymentPage() {
 
     void load();
   }, [bookingId, isAuthenticated, loadState]);
+
+  useEffect(() => {
+    if (!bookingId) {
+      return;
+    }
+    trackEvent("funnel_payment_view", { bookingId });
+  }, [bookingId]);
 
   useEffect(() => {
     if (!bookingId || !isAuthenticated) {
@@ -160,7 +251,13 @@ export function PaymentPage() {
         currency: "VND",
         idempotencyKey: createIdempotencyKey("payment-init"),
       });
-      setNotice("Đã tạo giao dịch đặt cọc. Hãy thanh toán theo QR/checkout URL.");
+      trackEvent("funnel_payment_initiated", {
+        bookingId,
+        paymentId: created.id,
+        amount: created.amount,
+        method: selectedMethod,
+      });
+      setNotice(`Đã tạo giao dịch đặt cọc qua ${selectedMethod === "BANK_QR" ? "QR ngân hàng" : "ví điện tử"}.`);
       await loadState(bookingId);
       setActivePaymentId(created.id);
       if (created.checkoutUrl) {
@@ -168,6 +265,11 @@ export function PaymentPage() {
       }
     } catch (err) {
       const uiError = toErrorPresentation(err, "Không tạo được giao dịch thanh toán");
+      trackEvent("funnel_payment_initiate_failed", {
+        bookingId,
+        method: selectedMethod,
+        traceId: uiError.traceId ?? null,
+      });
       setError(uiError.message);
       setTraceId(uiError.traceId ?? null);
     } finally {
@@ -190,10 +292,19 @@ export function PaymentPage() {
         providerReference: activePayment.providerReference || activePayment.id,
         success: true,
       });
+      trackEvent("funnel_payment_callback_simulated_success", {
+        bookingId: activePayment.bookingId,
+        paymentId: activePayment.id,
+      });
       await loadState(activePayment.bookingId);
       setNotice("Đã mô phỏng callback thanh toán thành công. Core-service sẽ tự cập nhật booking theo event.");
     } catch (err) {
       const uiError = toErrorPresentation(err, "Không mô phỏng callback được");
+      trackEvent("funnel_payment_callback_simulation_failed", {
+        bookingId: activePayment.bookingId,
+        paymentId: activePayment.id,
+        traceId: uiError.traceId ?? null,
+      });
       setError(uiError.message);
       setTraceId(uiError.traceId ?? null);
     } finally {
@@ -225,6 +336,24 @@ export function PaymentPage() {
 
       <section className="payment-grid">
         <div className="payment-left">
+          <section className="payment-method-selector">
+            <h3>Chọn phương thức thanh toán</h3>
+            <div className="payment-method-selector-grid">
+              {paymentMethods.map((method) => (
+                <button
+                  key={method.key}
+                  type="button"
+                  className={`payment-method-choice${selectedMethod === method.key ? " is-selected" : ""}${method.available ? "" : " is-disabled"}`}
+                  onClick={() => method.available && setSelectedMethod(method.key)}
+                  disabled={!method.available || busy}
+                >
+                  <strong>{method.label}</strong>
+                  <span>{method.description}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
           <article className="payment-method-card">
             <h3>1. MOMO</h3>
             <p>Tên tài khoản: <strong>SPORTCOURT DEMO</strong></p>
@@ -244,6 +373,12 @@ export function PaymentPage() {
             Vui lòng chuyển khoản <strong>{formatCurrency(booking?.depositRequired ?? 0)}</strong> để đặt cọc.
           </p>
 
+          <section className="payment-trust-signals">
+            <span>🔐 Dữ liệu giao dịch qua gateway và JWT</span>
+            <span>🧾 Có log giao dịch và mã trace để hỗ trợ</span>
+            <span>🔄 Tự đồng bộ trạng thái từ callback/payment events</span>
+          </section>
+
           <div className="upload-placeholder-row">
             <div className="upload-placeholder">Tải ảnh thanh toán</div>
             <div className="upload-placeholder">Tải minh chứng ưu đãi (nếu có)</div>
@@ -252,15 +387,41 @@ export function PaymentPage() {
 
         <aside className="payment-right">
           <h3>Thông tin lịch đặt</h3>
+          <div className="payment-summary-highlight">
+            <span>Giữ chỗ đến</span>
+            <strong>{countdown}</strong>
+          </div>
           <p><strong>Mã booking:</strong> #{booking?.id.slice(0, 8)}</p>
           <p><strong>Thời gian:</strong> {booking ? `${toLocalDateTime(booking.startTime)} - ${toLocalDateTime(booking.endTime)}` : "-"}</p>
           <p><strong>Tổng đơn:</strong> {formatCurrency(booking?.priceTotal ?? 0)}</p>
           <p><strong>Cần thanh toán:</strong> {formatCurrency(booking?.depositRequired ?? 0)}</p>
           <p><strong>Trạng thái booking:</strong> {booking?.status ?? "-"} / {booking?.paymentStatus ?? "-"}</p>
-          <p><strong>Giữ chỗ đến:</strong> {countdown}</p>
 
-          <button type="button" className="booking-cta" onClick={() => { void handleInitiatePayment(); }} disabled={busy || !canInitiate}>
-            TẠO GIAO DỊCH ĐẶT CỌC
+          {isPaymentSuccess ? (
+            <p className="inline-success">
+              Thanh toán đã được xác nhận. Bạn có thể kiểm tra chi tiết booking để tiếp tục.
+            </p>
+          ) : null}
+
+          {isPendingConfirmation ? (
+            <p className="inline-muted">
+              Đang xác nhận thanh toán với backend... Hệ thống tự làm mới sau mỗi 5 giây.
+            </p>
+          ) : null}
+
+          {isPaymentFailed ? (
+            <p className="inline-error">
+              Thanh toán chưa thành công. Bạn có thể tạo giao dịch mới để thử lại.
+            </p>
+          ) : null}
+
+          <button
+            type="button"
+            className="booking-cta"
+            onClick={() => { void handleInitiatePayment(); }}
+            disabled={busy || !canInitiate || isPendingConfirmation}
+          >
+            {isPaymentFailed ? "THỬ LẠI THANH TOÁN" : "TẠO GIAO DỊCH ĐẶT CỌC"}
           </button>
 
           <button type="button" className="ghost-cta" onClick={() => { void handleSimulateSuccess(); }} disabled={busy || !activePayment || activePayment.status !== "PENDING"}>
@@ -275,6 +436,9 @@ export function PaymentPage() {
             <div className="payment-active-box">
               <p><strong>Giao dịch hiện tại:</strong> #{activePayment.id.slice(0, 8)}</p>
               <p><strong>Trạng thái:</strong> {mapPaymentStatusLabel(activePayment.status)}</p>
+              {activePayment.failureReason ? (
+                <p className="muted">Lý do lỗi: {activePayment.failureReason}</p>
+              ) : null}
               {activePayment.checkoutUrl && (
                 <a href={activePayment.checkoutUrl} target="_blank" rel="noreferrer" className="muted">
                   Mở checkout URL
@@ -283,11 +447,11 @@ export function PaymentPage() {
             </div>
           )}
 
-          {!!payments.length && (
+          {!!sortedPayments.length && (
             <div className="payment-list-box">
               <p><strong>Lịch sử giao dịch</strong></p>
               <ul className="list-clean compact-list">
-                {payments.map((payment) => (
+                {sortedPayments.map((payment) => (
                   <li key={payment.id}>
                     #{payment.id.slice(0, 8)} · {mapPaymentStatusLabel(payment.status)} · {formatCurrency(payment.amount)}
                   </li>
@@ -295,17 +459,11 @@ export function PaymentPage() {
               </ul>
             </div>
           )}
-
-          {latestSuccessPayment && (
-            <p className="inline-success">Đã có giao dịch thành công. Booking sẽ được xác nhận sau khi event được xử lý.</p>
-          )}
         </aside>
       </section>
 
       {error && <p className="inline-error">{error}{traceId ? ` (traceId: ${traceId})` : ""}</p>}
       {notice && <p className="inline-success">{notice}</p>}
-
-      <BottomNavigation active="account" />
     </div>
   );
 }

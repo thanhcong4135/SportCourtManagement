@@ -1,5 +1,4 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { toErrorPresentation } from "../../lib/errorPresentation";
 import {
   getAdminUserById,
@@ -235,9 +234,7 @@ export function AdminUserManagementPage() {
                 <option key={role} value={role}>{role}</option>
               ))}
             </select>
-          </label>
-          <Link className="btn ghost" to="/ops">Về Ops Portal</Link>
-        </div>
+          </label>        </div>
 
         <div className="ops-table-wrap">
           <table className="ops-table">
@@ -354,3 +351,4 @@ export function AdminUserManagementPage() {
     </main>
   );
 }
+
