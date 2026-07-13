@@ -2712,3 +2712,75 @@ File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservice
   - `frontend`: `npm.cmd run -s lint` (PASS)
   - `frontend`: `npm.cmd run phase12:smoke` (FAIL do env chua san sang: `ECONNREFUSED localhost:8080`)
   - Kiem tra nhanh health: `http://localhost:8080/actuator/health` khong ket noi duoc.
+### 2026-05-11 - Frontend pixel-close refactor (phase audit + core booking pages)
+- Yeu cau:
+  - Dua frontend tiep can pixel-close voi web mau booking (layout/UI/flow/responsive), khong copy brand/assets.
+- Muc dich:
+  - Chuan hoa flow dat san end-to-end tren UI: Home -> Discover -> Venue detail -> Slot grid -> Checkout -> Payment -> Success.
+  - Tang kha nang thay API/mock theo service layer, giu routing/auth hien co.
+- Hanh dong:
+  - Tao tai lieu audit + checklist:
+    - `docs/frontend-ui-audit-2026-05-11.md`.
+  - Bo sung service/data layer:
+    - `frontend/src/services/venueService.ts`
+    - `frontend/src/services/bookingService.ts`
+    - `frontend/src/services/paymentService.ts`
+    - `frontend/src/data/mockMedia.ts`
+  - Tach component booking:
+    - `HeroSearchBox`, `SportCategoryCard`, `VenueCard`, `VenueFilter`, `TimeSlotGrid`, `BookingSummary`, `MobileBookingBar`, `PaymentMethodSelector`.
+  - Refactor page:
+    - `frontend/src/pages/LandingPage.tsx`
+    - `frontend/src/pages/customer/DiscoverPage.tsx`
+    - `frontend/src/pages/customer/VenueDetailPage.tsx`
+    - `frontend/src/pages/customer/BookingGridPage.tsx`
+    - `frontend/src/pages/customer/BookingCheckoutPage.tsx`
+    - `frontend/src/pages/customer/PaymentPage.tsx`
+    - Them `frontend/src/pages/customer/BookingSuccessPage.tsx`
+  - Cap nhat route:
+    - `frontend/src/App.tsx` them route `/booking/success/:bookingId` + fix fallback text.
+  - Nang cap style responsive/pixel-close:
+    - `frontend/src/index.css` them bo class cho home/listing/detail/checkout/payment/success.
+  - Fix compile error TS:
+    - bo sung sort filter vao `VenueFilter` + wire o `DiscoverPage`.
+    - fix narrow type cho `bookingId` trong `PaymentPage`.
+- Verify:
+  - `frontend`: `npm run build` (PASS)
+  - `frontend`: `npm run lint` (PASS)
+### 2026-05-19 - Validate thong tin khach hang tai checkout
+- Yeu cau: tai trang xac nhan dat san, ho ten va so dien thoai phai duoc verify va khong duoc bo trong.
+- Hanh dong:
+  - Them validation bat buoc cho `Ho va ten` va `So dien thoai` trong `frontend/src/pages/customer/BookingCheckoutPage.tsx`.
+  - Hien thi loi ngay duoi tung field, danh dau field loi bang border do va `aria-invalid`.
+  - Giu `Ghi chu cho chu san` la tuy chon.
+  - Sua lai text checkout bi vo encoding ve tieng Viet UTF-8 dung.
+- Verify:
+  - `frontend`: `npm run lint` (PASS)
+  - `frontend`: `npm run build` (PASS)
+### 2026-05-11 - Fix loi dinh dang chu UI (mojibake)
+- Yeu cau: check lai UI nao loi chu va fix.
+- Hanh dong:
+  - Quet toan bo `frontend/src` tim chuoi vo ma (`�`, ky tu mojibake).
+  - Xac dinh file loi: `frontend/src/pages/customer/BookingCheckoutPage.tsx`.
+  - Rewrite lai file checkout voi Unicode UTF-8 dung (tat ca label/message/button text tieng Viet co dau).
+- Verify:
+  - `frontend`: `npm run build` (PASS)
+  - `frontend`: `npm run lint` (PASS)
+### 2026-05-27 - Them chuc nang chinh sua venue trong dashboard
+- Yeu cau: lam chuc nang chinh sua thong tin venue cho trang admin/ops.
+- Hanh dong:
+  - Them `VenueUpdateRequest` cho core-service.
+  - Them `PUT /api/core/venues/{id}` de cap nhat ten venue va dia chi.
+  - Cap nhat security cho phep `ADMIN`/`OWNER` goi `PUT /api/core/venues/**`.
+  - Them form "Chinh sua venue hien tai" trong `OpsPortalPage`.
+  - Them validate FE: ten venue va dia chi khong duoc bo trong.
+- Verify:
+  - `core-service`: `mvn "-Dmaven.repo.local=.m2repo" -DskipTests compile` (PASS)
+  - `frontend`: `npm run lint` (PASS)
+  - `frontend`: `npm run build` (PASS)
+
+## 2026-05-27 - Tích hợp VNPAY sandbox/dev
+- Mục đích: thêm flow thanh toán VNPAY sandbox đúng kiến trúc backend tạo payment URL, IPN xác nhận chính thức, Return URL chỉ điều hướng UI.
+- Hành động: thêm cấu hình `vnpay`, properties, util ký/verify HMAC SHA512, entity fields, migration, endpoint create-payment/ipn/return/by-ref trong payment-service.
+- Hành động: mở route bảo mật phù hợp ở payment-service và api-gateway cho VNPAY IPN/return/create-payment.
+- Hành động: thêm option VNPAY Sandbox ở checkout frontend và trang `/payment-result` để đọc trạng thái thật theo paymentRef.
+- Ghi chú: không hard-code secret; `VNPAY_HASH_SECRET` phải khai báo qua env khi test sandbox.

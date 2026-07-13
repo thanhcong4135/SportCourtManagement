@@ -134,6 +134,7 @@ export function mapPaymentTransaction(value: unknown) {
   const dto = asObject(value);
   return {
     id: asString(dto.id),
+    paymentRef: asString(dto.paymentRef),
     bookingId: asString(dto.bookingId),
     customerId: asString(dto.customerId),
     amount: asNumber(dto.amount),
@@ -141,8 +142,14 @@ export function mapPaymentTransaction(value: unknown) {
     status: toEnum(dto.status, paymentTxStatusValues, "PENDING"),
     provider: asString(dto.provider),
     providerReference: asString(dto.providerReference),
+    providerTransactionNo: asString(dto.providerTransactionNo),
+    bankCode: asString(dto.bankCode),
+    responseCode: asString(dto.responseCode),
+    transactionStatus: asString(dto.transactionStatus),
+    payDate: asString(dto.payDate),
     checkoutUrl: asString(dto.checkoutUrl),
     requestedAt: asString(dto.requestedAt),
+    updatedAt: asString(dto.updatedAt),
     completedAt: asString(dto.completedAt),
     failureReason: asString(dto.failureReason),
     idempotencyKey: asString(dto.idempotencyKey),

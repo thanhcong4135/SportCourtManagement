@@ -236,6 +236,7 @@ public class PaymentService {
     private PaymentTransactionResponse toResponse(PaymentTransaction payment) {
         return new PaymentTransactionResponse(
             payment.getId(),
+            payment.getPaymentRef(),
             payment.getBookingId(),
             payment.getCustomerId(),
             payment.getAmount(),
@@ -245,8 +246,14 @@ public class PaymentService {
             payment.getIdempotencyKey(),
             payment.getProvider(),
             payment.getProviderReference(),
+            payment.getProviderTransactionNo(),
+            payment.getBankCode(),
+            payment.getResponseCode(),
+            payment.getTransactionStatus(),
+            payment.getPayDate(),
             payment.getCheckoutUrl(),
             payment.getRequestedAt(),
+            payment.getUpdatedAt(),
             payment.getCompletedAt(),
             payment.getFailureReason()
         );

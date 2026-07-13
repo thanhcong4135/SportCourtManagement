@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public record PaymentTransactionResponse(
     UUID id,
+    String paymentRef,
     UUID bookingId,
     UUID customerId,
     BigDecimal amount,
@@ -19,8 +20,14 @@ public record PaymentTransactionResponse(
     String idempotencyKey,
     PaymentProvider provider,
     String providerReference,
+    String providerTransactionNo,
+    String bankCode,
+    String responseCode,
+    String transactionStatus,
+    String payDate,
     String checkoutUrl,
     OffsetDateTime requestedAt,
+    OffsetDateTime updatedAt,
     OffsetDateTime completedAt,
     String failureReason
 ) {

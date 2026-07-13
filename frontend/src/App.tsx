@@ -18,10 +18,13 @@ const BookingGridPage = lazy(() => import("./pages/customer/BookingGridPage").th
 const BookingCheckoutPage = lazy(() => import("./pages/customer/BookingCheckoutPage").then((module) => ({ default: module.BookingCheckoutPage })));
 const BatchBookingPage = lazy(() => import("./features/booking/BatchBookingPage").then((module) => ({ default: module.BatchBookingPage })));
 const PaymentPage = lazy(() => import("./pages/customer/PaymentPage").then((module) => ({ default: module.PaymentPage })));
+const PaymentResultPage = lazy(() => import("./pages/customer/PaymentResultPage").then((module) => ({ default: module.PaymentResultPage })));
+const BookingSuccessPage = lazy(() => import("./pages/customer/BookingSuccessPage").then((module) => ({ default: module.BookingSuccessPage })));
 const AccountPage = lazy(() => import("./pages/customer/AccountPage").then((module) => ({ default: module.AccountPage })));
 const BookingDetailPage = lazy(() => import("./pages/customer/BookingDetailPage").then((module) => ({ default: module.BookingDetailPage })));
 const AuthLoginPage = lazy(() => import("./pages/auth/AuthLoginPage").then((module) => ({ default: module.AuthLoginPage })));
 const AuthRegisterPage = lazy(() => import("./pages/auth/AuthRegisterPage").then((module) => ({ default: module.AuthRegisterPage })));
+const OAuth2RedirectPage = lazy(() => import("./pages/auth/OAuth2RedirectPage").then((module) => ({ default: module.OAuth2RedirectPage })));
 const OpsPortalPage = lazy(() => import("./pages/ops/OpsPortalPage").then((module) => ({ default: module.OpsPortalPage })));
 const NotificationsPage = lazy(() => import("./features/notification/NotificationsPage").then((module) => ({ default: module.NotificationsPage })));
 const AdminUserManagementPage = lazy(() => import("./features/admin/AdminUserManagementPage").then((module) => ({ default: module.AdminUserManagementPage })));
@@ -69,6 +72,22 @@ function App() {
           )}
         />
         <Route
+          path="/payment-result"
+          element={(
+            <ProtectedRoute roles={CUSTOMER_BOOKING_ROLES}>
+              <PaymentResultPage />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/booking/success/:bookingId"
+          element={(
+            <ProtectedRoute roles={CUSTOMER_BOOKING_ROLES}>
+              <BookingSuccessPage />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
           path="/account"
           element={(
             <ProtectedRoute roles={CUSTOMER_BOOKING_ROLES}>
@@ -86,6 +105,7 @@ function App() {
         />
         <Route path="/auth/login" element={<AuthLoginPage />} />
         <Route path="/auth/register" element={<AuthRegisterPage />} />
+        <Route path="/oauth2/redirect" element={<OAuth2RedirectPage />} />
         <Route
           path="/ops"
           element={(

@@ -4,6 +4,7 @@ import com.sportcourt.core.api.ApiResponse;
 import com.sportcourt.core.domain.Venue;
 import com.sportcourt.core.dto.VenueCreateRequest;
 import com.sportcourt.core.dto.VenueResponse;
+import com.sportcourt.core.dto.VenueUpdateRequest;
 import com.sportcourt.core.mapper.CoreApiMapper;
 import com.sportcourt.core.service.VenueService;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/core/venues")
@@ -37,5 +39,14 @@ public class VenueController {
             .map(CoreApiMapper::toVenueResponse)
             .toList();
         return ApiResponse.success(responses);
+    }
+
+    @PutMapping("/{id}")
+    public ApiResponse<VenueResponse> update(
+        @PathVariable UUID id,
+        @Valid @RequestBody VenueUpdateRequest req
+    ) {
+        Venue venue = venueService.update(id, req);
+        return ApiResponse.success(CoreApiMapper.toVenueResponse(venue));
     }
 }

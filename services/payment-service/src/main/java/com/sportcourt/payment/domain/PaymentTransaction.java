@@ -23,6 +23,9 @@ public class PaymentTransaction {
     @UuidGenerator
     private UUID id;
 
+    @Column(name = "payment_ref", unique = true, length = 128)
+    private String paymentRef;
+
     @Column(name = "booking_id", nullable = false)
     private UUID bookingId;
 
@@ -53,11 +56,32 @@ public class PaymentTransaction {
     @Column(name = "provider_reference", length = 128)
     private String providerReference;
 
-    @Column(name = "checkout_url", length = 512)
+    @Column(name = "provider_transaction_no", length = 128)
+    private String providerTransactionNo;
+
+    @Column(name = "bank_code", length = 64)
+    private String bankCode;
+
+    @Column(name = "response_code", length = 16)
+    private String responseCode;
+
+    @Column(name = "transaction_status", length = 16)
+    private String transactionStatus;
+
+    @Column(name = "pay_date", length = 32)
+    private String payDate;
+
+    @Column(name = "raw_callback_data", columnDefinition = "TEXT")
+    private String rawCallbackData;
+
+    @Column(name = "checkout_url", length = 2048)
     private String checkoutUrl;
 
     @Column(name = "requested_at", nullable = false)
     private OffsetDateTime requestedAt;
+
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
 
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
@@ -71,6 +95,14 @@ public class PaymentTransaction {
 
     public void setId(UUID id) {
         this.id = id;
+    }
+
+    public String getPaymentRef() {
+        return paymentRef;
+    }
+
+    public void setPaymentRef(String paymentRef) {
+        this.paymentRef = paymentRef;
     }
 
     public UUID getBookingId() {
@@ -137,6 +169,54 @@ public class PaymentTransaction {
         this.providerReference = providerReference;
     }
 
+    public String getProviderTransactionNo() {
+        return providerTransactionNo;
+    }
+
+    public void setProviderTransactionNo(String providerTransactionNo) {
+        this.providerTransactionNo = providerTransactionNo;
+    }
+
+    public String getBankCode() {
+        return bankCode;
+    }
+
+    public void setBankCode(String bankCode) {
+        this.bankCode = bankCode;
+    }
+
+    public String getResponseCode() {
+        return responseCode;
+    }
+
+    public void setResponseCode(String responseCode) {
+        this.responseCode = responseCode;
+    }
+
+    public String getTransactionStatus() {
+        return transactionStatus;
+    }
+
+    public void setTransactionStatus(String transactionStatus) {
+        this.transactionStatus = transactionStatus;
+    }
+
+    public String getPayDate() {
+        return payDate;
+    }
+
+    public void setPayDate(String payDate) {
+        this.payDate = payDate;
+    }
+
+    public String getRawCallbackData() {
+        return rawCallbackData;
+    }
+
+    public void setRawCallbackData(String rawCallbackData) {
+        this.rawCallbackData = rawCallbackData;
+    }
+
     public PaymentProvider getProvider() {
         return provider;
     }
@@ -159,6 +239,14 @@ public class PaymentTransaction {
 
     public void setRequestedAt(OffsetDateTime requestedAt) {
         this.requestedAt = requestedAt;
+    }
+
+    public OffsetDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(OffsetDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 
     public OffsetDateTime getCompletedAt() {

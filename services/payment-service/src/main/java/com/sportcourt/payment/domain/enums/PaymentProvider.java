@@ -3,7 +3,8 @@ package com.sportcourt.payment.domain.enums;
 import java.util.Locale;
 
 public enum PaymentProvider {
-    MOCK;
+    MOCK,
+    VNPAY;
 
     public static PaymentProvider fromConfig(String rawValue) {
         if (rawValue == null || rawValue.isBlank()) {

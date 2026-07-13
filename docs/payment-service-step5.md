@@ -19,6 +19,16 @@
   - Get payment by id.
 - `GET /api/payments/booking/{bookingId}`
   - List payments by booking.
+- `POST /api/payments/vnpay/create-payment`
+  - Create idempotent VNPAY sandbox deposit transaction and return signed checkout URL.
+- `GET /api/payments/vnpay/ipn`
+  - Public server-to-server callback from VNPAY.
+  - Verify merchant code, HMAC SHA512 signature and amount before updating payment and enqueueing outbox event.
+- `GET /api/payments/vnpay/return`
+  - Public browser redirect callback.
+  - Verify return signature and redirect user to frontend payment result page without updating DB.
+- `GET /api/payments/by-ref/{paymentRef}`
+  - Get VNPAY transaction status for frontend polling.
 
 ## Kafka contracts
 - Consume topic: `booking.events`
@@ -41,7 +51,9 @@
 - DB migration: `services/payment-service/src/main/resources/db/migration/V1__init.sql`.
 - DB migration provider fields: `services/payment-service/src/main/resources/db/migration/V2__add_provider_and_checkout_url.sql`.
 - DB migration outbox: `services/payment-service/src/main/resources/db/migration/V3__outbox_event.sql`.
-- Payment provider da duoc tach qua abstraction `PaymentProviderClient` (hien tai co `MOCK`, co the bo sung VNPay/Stripe sau).
+- DB migration VNPay fields: `services/payment-service/src/main/resources/db/migration/V5__add_vnpay_fields.sql`.
+- DB migration expanded checkout URL: `services/payment-service/src/main/resources/db/migration/V6__expand_checkout_url.sql`.
+- Payment provider da duoc tach qua abstraction `PaymentProviderClient`; flow hien tai ho tro `MOCK` va VNPAY sandbox.
 - API response payment tra them:
   - `provider`
   - `checkoutUrl`
@@ -51,6 +63,10 @@
   - `payment.callback.signature.secret`
   - `payment.callback.signature.max-skew-seconds`
 - Event `payment.events` da publish qua outbox scheduler (khong push truc tiep trong callback transaction).
+- VNPAY IPN va return URL co vai tro khac nhau:
+  - IPN la callback server-to-server de cap nhat payment chinh thuc.
+  - Return URL chi redirect user ve frontend, khong cap nhat DB.
+- Huong dan cau hinh va test sandbox: `docs/vnpay-sandbox-dev.md`.
 - Outbox observability:
   - metrics: `outbox.events.pending`, `outbox.events.failed`
   - health indicator: `outbox` (`/actuator/health/outbox`)

@@ -1,18 +1,10 @@
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { BookingSummary } from "../../components/booking/BookingSummary";
+import { TimeSlotGrid, type SlotStatus } from "../../components/booking/TimeSlotGrid";
 import { Button, Modal, useToast } from "../../components/ui";
-import { useAuth } from "../../context/AuthContext";
-import { trackEvent } from "../../lib/analytics";
 import { toErrorPresentation } from "../../lib/errorPresentation";
-import {
-  type Booking,
-  type Court,
-  buildDateRangeIso,
-  listBookings,
-  listCourts,
-  listVenues,
-  type Venue,
-} from "../../lib/coreApi";
+import { buildDateRangeIso, listBookings, listCourts, listVenues, type Booking, type Court, type Venue } from "../../lib/coreApi";
 
 const START_MINUTE = 5 * 60;
 const END_MINUTE = 24 * 60;
@@ -24,21 +16,10 @@ const timeMarkers = Array.from({ length: (END_MINUTE - START_MINUTE) / STEP_MINU
   const mm = String(total % 60).padStart(2, "0");
   return `${hh}:${mm}`;
 });
-
 const slotMarkers = timeMarkers.slice(0, -1);
 
-type SlotStatus = "free" | "held" | "booked" | "blocked";
-
-type SlotAnchor = {
-  courtId: string;
-  slotIndex: number;
-};
-
-type SelectedRange = {
-  courtId: string;
-  startIndex: number;
-  endIndex: number;
-};
+type SlotAnchor = { courtId: string; slotIndex: number };
+type SelectedRange = { courtId: string; startIndex: number; endIndex: number };
 
 function formatIsoDate(value: Date) {
   const y = value.getFullYear();
@@ -47,9 +28,23 @@ function formatIsoDate(value: Date) {
   return `${y}-${m}-${d}`;
 }
 
+function getTodayIsoDate(): string {
+  return formatIsoDate(new Date());
+}
+
 function toMinutes(time: string) {
   const [hh, mm] = time.split(":").map(Number);
   return hh * 60 + mm;
+}
+
+function mapBookingToSlotStatus(booking: Booking): SlotStatus {
+  if (booking.status === "DRAFT") {
+    return "held";
+  }
+  if (booking.status === "CONFIRMED" || booking.status === "IN_PROGRESS" || booking.status === "COMPLETED") {
+    return "booked";
+  }
+  return "free";
 }
 
 function statusRank(status: SlotStatus): number {
@@ -65,19 +60,8 @@ function statusRank(status: SlotStatus): number {
   }
 }
 
-function mapBookingToSlotStatus(booking: Booking): SlotStatus {
-  if (booking.status === "DRAFT") {
-    return "held";
-  }
-  if (booking.status === "CONFIRMED" || booking.status === "IN_PROGRESS" || booking.status === "COMPLETED") {
-    return "booked";
-  }
-  return "free";
-}
-
 export function BookingGridPage() {
   const navigate = useNavigate();
-  const { token } = useAuth();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -87,13 +71,9 @@ export function BookingGridPage() {
 
   const [selectedVenueId, setSelectedVenueId] = useState(searchParams.get("venueId") ?? "");
   const [selectedCourtId, setSelectedCourtId] = useState(searchParams.get("courtId") ?? "");
-  const [selectedDate, setSelectedDate] = useState(() => formatIsoDate(new Date()));
-  const [startTime, setStartTime] = useState(searchParams.get("start") ?? "");
-  const [endTime, setEndTime] = useState(searchParams.get("end") ?? "");
-
+  const [selectedDate, setSelectedDate] = useState(searchParams.get("date") ?? formatIsoDate(new Date()));
   const [selectionAnchor, setSelectionAnchor] = useState<SlotAnchor | null>(null);
   const [selectedRange, setSelectedRange] = useState<SelectedRange | null>(null);
-  const [refreshSignal, setRefreshSignal] = useState(0);
   const [showClearSelectionModal, setShowClearSelectionModal] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -101,20 +81,14 @@ export function BookingGridPage() {
   const [traceId, setTraceId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadVenues() {
+    async function loadVenueRows() {
       try {
         setError(null);
         setTraceId(null);
-        const venueRows = await listVenues();
-        setVenues(venueRows);
-
-        if (!venueRows.length) {
-          setSelectedVenueId("");
-          return;
-        }
-
-        if (!selectedVenueId || !venueRows.some((venue) => venue.id === selectedVenueId)) {
-          setSelectedVenueId(venueRows[0].id);
+        const rows = await listVenues();
+        setVenues(rows);
+        if (!selectedVenueId && rows[0]) {
+          setSelectedVenueId(rows[0].id);
         }
       } catch (err) {
         const uiError = toErrorPresentation(err, "Không tải được cụm sân");
@@ -122,154 +96,117 @@ export function BookingGridPage() {
         setTraceId(uiError.traceId ?? null);
       }
     }
-
-    void loadVenues();
+    void loadVenueRows();
   }, [selectedVenueId]);
 
   useEffect(() => {
-    async function loadCourtsByVenue() {
+    async function loadCourtRows() {
       if (!selectedVenueId) {
         setCourts([]);
         return;
       }
-
       try {
         setError(null);
         setTraceId(null);
         const rows = await listCourts(selectedVenueId);
         setCourts(rows);
-        setSelectedCourtId((prev) => (
-          prev && rows.some((court) => court.id === prev) ? prev : rows[0]?.id ?? ""
+        setSelectedCourtId((current) => (
+          current && rows.some((court) => court.id === current) ? current : (rows[0]?.id ?? "")
         ));
       } catch (err) {
-        const uiError = toErrorPresentation(err, "Không tải được sân");
+        const uiError = toErrorPresentation(err, "Không tải được danh sách sân con");
         setError(uiError.message);
         setTraceId(uiError.traceId ?? null);
       }
     }
-
-    void loadCourtsByVenue();
+    void loadCourtRows();
   }, [selectedVenueId]);
 
   useEffect(() => {
-    setSelectionAnchor(null);
-    setSelectedRange(null);
-    setStartTime("");
-    setEndTime("");
-  }, [selectedVenueId, selectedDate]);
-
-  useEffect(() => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      if (selectedVenueId) {
-        next.set("venueId", selectedVenueId);
-      } else {
-        next.delete("venueId");
-      }
-      if (selectedCourtId) {
-        next.set("courtId", selectedCourtId);
-      } else {
-        next.delete("courtId");
-      }
-      return next;
-    });
-  }, [selectedCourtId, selectedVenueId, setSearchParams]);
-
-  useEffect(() => {
     async function loadSchedule() {
-      if (!courts.length || !token?.accessToken) {
+      if (!courts.length) {
         setBookingsByCourt({});
         return;
       }
-
       try {
         setLoading(true);
         setError(null);
         setTraceId(null);
         const range = buildDateRangeIso(selectedDate);
-        const rows = await Promise.all(
-          courts.map(async (court) => {
-            const page = await listBookings({
-              courtId: court.id,
-              from: range.from,
-              to: range.to,
-              size: 80,
-            });
-            return [court.id, page.items ?? []] as const;
-          }),
-        );
-
+        const rows = await Promise.all(courts.map(async (court) => {
+          const page = await listBookings({ courtId: court.id, from: range.from, to: range.to, size: 120 });
+          return [court.id, page.items ?? []] as const;
+        }));
         setBookingsByCourt(Object.fromEntries(rows));
       } catch (err) {
-        const uiError = toErrorPresentation(err, "Không tải được lịch đặt sân");
+        const uiError = toErrorPresentation(err, "Không tải được lịch đặt");
         setError(uiError.message);
         setTraceId(uiError.traceId ?? null);
       } finally {
         setLoading(false);
       }
     }
-
     void loadSchedule();
-  }, [courts, refreshSignal, selectedDate, token?.accessToken]);
+  }, [courts, selectedDate]);
 
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        setRefreshSignal((prev) => prev + 1);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (selectedVenueId) {
+        next.set("venueId", selectedVenueId);
       }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, []);
-
-  useEffect(() => {
-    if (!courts.length) {
-      return;
-    }
-    const handle = window.setInterval(() => {
-      setRefreshSignal((prev) => prev + 1);
-    }, 15_000);
-    return () => window.clearInterval(handle);
-  }, [courts.length]);
+      if (selectedCourtId) {
+        next.set("courtId", selectedCourtId);
+      }
+      next.set("date", selectedDate);
+      return next;
+    }, { replace: true });
+  }, [selectedCourtId, selectedDate, selectedVenueId, setSearchParams]);
 
   const selectedVenue = useMemo(() => venues.find((venue) => venue.id === selectedVenueId) ?? null, [selectedVenueId, venues]);
   const selectedCourt = useMemo(() => courts.find((court) => court.id === selectedCourtId) ?? null, [courts, selectedCourtId]);
 
   const slotStatusesByCourt = useMemo(() => {
-    const courtSlotMap: Record<string, SlotStatus[]> = {};
-
+    const isToday = selectedDate === getTodayIsoDate();
+    const now = new Date();
+    const nowMinute = now.getHours() * 60 + now.getMinutes();
+    const map: Record<string, SlotStatus[]> = {};
     courts.forEach((court) => {
       const slots: SlotStatus[] = Array.from({ length: slotMarkers.length }, () => "free");
-      const rowBookings = bookingsByCourt[court.id] ?? [];
-
-      rowBookings.forEach((booking) => {
+      const rows = bookingsByCourt[court.id] ?? [];
+      rows.forEach((booking) => {
         if (booking.status === "CANCELED" || booking.status === "FAILED_TIMEOUT") {
           return;
         }
-        const slotStatus = mapBookingToSlotStatus(booking);
-        if (slotStatus === "free") {
-          return;
-        }
+        const status = mapBookingToSlotStatus(booking);
         const start = new Date(booking.startTime);
         const end = new Date(booking.endTime);
         const bookingStart = start.getHours() * 60 + start.getMinutes();
         const bookingEnd = end.getHours() * 60 + end.getMinutes();
-
         slotMarkers.forEach((marker, index) => {
-          const markerMinute = toMinutes(marker);
-          if (markerMinute >= bookingStart && markerMinute < bookingEnd) {
-            if (statusRank(slotStatus) > statusRank(slots[index])) {
-              slots[index] = slotStatus;
-            }
+          const minute = toMinutes(marker);
+          if (minute >= bookingStart && minute < bookingEnd && statusRank(status) > statusRank(slots[index])) {
+            slots[index] = status;
           }
         });
       });
 
-      courtSlotMap[court.id] = slots;
+      if (isToday) {
+        slotMarkers.forEach((marker, index) => {
+          if (toMinutes(marker) <= nowMinute) {
+            slots[index] = "blocked";
+          }
+        });
+      }
+      map[court.id] = slots;
     });
+    return map;
+  }, [bookingsByCourt, courts, selectedDate]);
 
-    return courtSlotMap;
-  }, [bookingsByCourt, courts]);
+  const selectedStart = selectedRange ? slotMarkers[selectedRange.startIndex] : "";
+  const selectedEnd = selectedRange ? timeMarkers[selectedRange.endIndex] : "";
+  const selectedSlotCount = selectedRange ? selectedRange.endIndex - selectedRange.startIndex : 0;
+  const selectedHours = selectedSlotCount / 2;
 
   function getSlotStatus(courtId: string, slotIndex: number): SlotStatus {
     return slotStatusesByCourt[courtId]?.[slotIndex] ?? "free";
@@ -287,8 +224,6 @@ export function BookingGridPage() {
   function applyRange(courtId: string, startIndex: number, endIndex: number, keepAnchor: boolean) {
     setSelectedCourtId(courtId);
     setSelectedRange({ courtId, startIndex, endIndex });
-    setStartTime(slotMarkers[startIndex]);
-    setEndTime(timeMarkers[endIndex]);
     setSelectionAnchor(keepAnchor ? { courtId, slotIndex: startIndex } : null);
   }
 
@@ -296,117 +231,58 @@ export function BookingGridPage() {
     const status = getSlotStatus(courtId, slotIndex);
     if (status !== "free") {
       showToast({
-        title: "Không chọn được ô này",
-        message: status === "held"
-          ? "Khung giờ này đang được giữ tạm bởi khách khác."
-          : "Khung giờ đã có người đặt hoặc bị khóa.",
+        title: "Khung giờ không khả dụng",
+        message: status === "held" ? "Khung giờ này đang được giữ chỗ." : "Khung giờ này đã đặt hoặc đã khóa.",
         variant: "warning",
       });
       return;
     }
 
-    setError(null);
-    setTraceId(null);
-
     if (!selectionAnchor || selectionAnchor.courtId !== courtId) {
       applyRange(courtId, slotIndex, slotIndex + 1, true);
-      showToast({
-        title: "Đã chọn điểm bắt đầu",
-        message: `${slotMarkers[slotIndex]} · ${courts.find((item) => item.id === courtId)?.name ?? "Sân"}`,
-      });
       return;
     }
 
     const startIndex = Math.min(selectionAnchor.slotIndex, slotIndex);
     const endIndex = Math.max(selectionAnchor.slotIndex, slotIndex) + 1;
-
     if (!isRangeFree(courtId, startIndex, endIndex)) {
-      setError("Khung giờ chọn có ô đã được đặt hoặc bị khóa. Vui lòng chọn lại.");
-      showToast({ title: "Khung giờ không hợp lệ", message: "Khoảng thời gian có ô không trống.", variant: "error" });
+      showToast({
+        title: "Khoảng chọn không hợp lệ",
+        message: "Khoảng giờ có ô không trống, vui lòng chọn lại.",
+        variant: "error",
+      });
       applyRange(courtId, slotIndex, slotIndex + 1, true);
       return;
     }
-
     applyRange(courtId, startIndex, endIndex, false);
-    trackEvent("funnel_grid_slot_range_selected", {
-      venueId: selectedVenueId,
-      courtId,
-      date: selectedDate,
-      start: slotMarkers[startIndex],
-      end: timeMarkers[endIndex],
-      slotCount: endIndex - startIndex,
-    });
-    showToast({
-      title: "Đã chọn khung giờ",
-      message: `${slotMarkers[startIndex]} - ${timeMarkers[endIndex]}`,
-      variant: "success",
-    });
   }
 
   function goNext() {
-    if (!selectedCourt || !selectedDate || !startTime || !endTime) {
-      setError("Vui lòng chọn sân và khung giờ trên bảng trước khi tiếp tục.");
+    if (!selectedRange || !selectedCourt) {
+      setError("Vui lòng chọn sân và khung giờ trước khi tiếp tục.");
       setTraceId(null);
-      showToast({
-        title: "Thiếu thông tin đặt lịch",
-        message: "Bạn cần chọn sân và khung giờ trước khi tiếp tục.",
-        variant: "warning",
-      });
       return;
     }
-
-    if (toMinutes(endTime) <= toMinutes(startTime)) {
-      setError("Khung giờ không hợp lệ: giờ kết thúc phải lớn hơn giờ bắt đầu.");
-      setTraceId(null);
-      showToast({ title: "Giờ không hợp lệ", message: "Giờ kết thúc phải lớn hơn giờ bắt đầu.", variant: "error" });
-      return;
-    }
-
     const params = new URLSearchParams({
       venueId: selectedVenueId,
-      courtId: selectedCourt.id,
+      courtId: selectedRange.courtId,
       date: selectedDate,
-      start: startTime,
-      end: endTime,
-    });
-    trackEvent("funnel_grid_continue_checkout", {
-      venueId: selectedVenueId,
-      courtId: selectedCourt.id,
-      date: selectedDate,
-      start: startTime,
-      end: endTime,
+      start: selectedStart,
+      end: selectedEnd,
     });
     navigate(`/booking/form?${params.toString()}`);
   }
 
   function resetSelection() {
-    trackEvent("funnel_grid_selection_cleared", {
-      venueId: selectedVenueId,
-      courtId: selectedCourtId,
-      date: selectedDate,
-    });
     setSelectionAnchor(null);
     setSelectedRange(null);
-    setStartTime("");
-    setEndTime("");
     setShowClearSelectionModal(false);
-    showToast({ title: "Đã xóa lựa chọn", variant: "info" });
   }
-
-  function applyQuickDate(offsetDays: number) {
-    const next = new Date();
-    next.setDate(next.getDate() + offsetDays);
-    setSelectedDate(formatIsoDate(next));
-  }
-
-  const timelineStyle = useMemo(() => ({
-    "--slot-count": slotMarkers.length,
-  }) as CSSProperties, []);
 
   return (
     <div className="alobo-screen booking-grid-screen">
       <header className="simple-topbar">
-        <Link to="/discover" className="back-link">←</Link>
+        <Link to={`/venues/${selectedVenueId}`} className="back-link">←</Link>
         <h1>Đặt lịch ngày trực quan</h1>
         <div className="booking-grid-date-chip">{selectedDate}</div>
       </header>
@@ -416,9 +292,7 @@ export function BookingGridPage() {
           Cụm sân
           <select value={selectedVenueId} onChange={(event) => setSelectedVenueId(event.target.value)}>
             {venues.map((venue) => (
-              <option key={venue.id} value={venue.id}>
-                {venue.name}
-              </option>
+              <option key={venue.id} value={venue.id}>{venue.name}</option>
             ))}
           </select>
         </label>
@@ -428,104 +302,63 @@ export function BookingGridPage() {
           <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
         </label>
 
-        <div className="booking-quick-dates">
-          <Button variant="ghost" size="sm" onClick={() => applyQuickDate(0)}>Hôm nay</Button>
-          <Button variant="ghost" size="sm" onClick={() => applyQuickDate(1)}>Ngày mai</Button>
-          <Button variant="secondary" size="sm" onClick={() => setRefreshSignal((prev) => prev + 1)}>Làm mới</Button>
-        </div>
+        <label>
+          Sân ưu tiên
+          <select value={selectedCourtId} onChange={(event) => setSelectedCourtId(event.target.value)}>
+            {courts.map((court) => (
+              <option key={court.id} value={court.id}>{court.name}</option>
+            ))}
+          </select>
+        </label>
 
-        <div className="booking-selected-slot" aria-live="polite">
-          <span>Khung giờ đã chọn</span>
-          <strong>{startTime && endTime ? `${startTime} - ${endTime}` : "Chưa chọn"}</strong>
-          {selectedCourt && <small>Sân: {selectedCourt.name}</small>}
+        <div className="booking-quick-dates">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedDate(formatIsoDate(new Date()))}>Hôm nay</Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate(`/venues/${selectedVenueId}?courtId=${selectedCourtId}&date=${selectedDate}`)}>
+            Quay lại trang sân
+          </Button>
         </div>
       </section>
 
       <section className="booking-grid-legend">
         <div className="legend-chip"><span className="legend-color free" />Trống</div>
-        <div className="legend-chip"><span className="legend-color held" />Đang giữ chỗ</div>
+        <div className="legend-chip"><span className="legend-color held" />Giữ chỗ</div>
         <div className="legend-chip"><span className="legend-color booked" />Đã đặt</div>
-        <div className="legend-chip"><span className="legend-color blocked" />Khóa</div>
+        <div className="legend-chip"><span className="legend-color blocked" />Đã khóa</div>
         <div className="legend-chip"><span className="legend-color selected" />Đang chọn</div>
-        <button type="button" className="legend-link" onClick={() => showToast({ title: "Bảng giá", message: "Bảng giá chi tiết sẽ được mở trong phase admin pricing.", variant: "info" })}>
-          Xem sân &amp; bảng giá
-        </button>
       </section>
 
       <section className="booking-grid-notice">
         <p>
-          <strong>Lưu ý:</strong> Nhấn 1 ô để chọn điểm bắt đầu, nhấn thêm 1 ô cùng hàng để chọn điểm kết thúc.
-          Chỉ chọn được các ô trống.
+          <strong>Lưu ý:</strong> Chọn 1 ô để bắt đầu, chọn thêm 1 ô cùng hàng để kết thúc.
+          Hệ thống chỉ cho phép chọn ô trống.
         </p>
-        {selectedVenue && <p>{selectedVenue.name} · {selectedVenue.address} · Tổng {courts.length} sân</p>}
-        <p>Dữ liệu được tự làm mới mỗi 15 giây để giảm lệch trạng thái khi nhiều người đặt cùng lúc.</p>
+        {selectedVenue ? <p>{selectedVenue.name} · {selectedVenue.address}</p> : null}
       </section>
 
       {error && <p className="inline-error">{error}{traceId ? ` (traceId: ${traceId})` : ""}</p>}
       {loading && <p className="inline-muted">Đang đồng bộ lịch đặt...</p>}
 
-      <section className="timeline-wrap booking-timeline-wrap" aria-label="Booking timeline" style={timelineStyle}>
-        <div className="timeline-header">
-          <div className="court-col-head">Sân</div>
-          {slotMarkers.map((marker) => (
-            <div key={marker} className="time-col-head">{marker}</div>
-          ))}
-        </div>
+      <TimeSlotGrid
+        courts={courts.map((court) => ({ id: court.id, name: court.name }))}
+        slotMarkers={slotMarkers}
+        gridEndMarkers={timeMarkers.slice(1)}
+        selectedCourtId={selectedCourtId}
+        selectedRange={selectedRange}
+        selectionAnchor={selectionAnchor}
+        getSlotStatus={getSlotStatus}
+        onSelectCourt={setSelectedCourtId}
+        onClickCell={handleCellClick}
+      />
 
-        {courts.map((court) => (
-          <div className={`timeline-row ${selectedCourtId === court.id ? "is-active" : ""}`} key={court.id}>
-            <button
-              type="button"
-              className="court-col timeline-court-button"
-              onClick={() => setSelectedCourtId(court.id)}
-              title={court.name}
-            >
-              {court.name}
-            </button>
-
-            {slotMarkers.map((marker, slotIndex) => {
-              const slotStatus = getSlotStatus(court.id, slotIndex);
-              const isSelected = selectedRange
-                && selectedRange.courtId === court.id
-                && slotIndex >= selectedRange.startIndex
-                && slotIndex < selectedRange.endIndex;
-              const isAnchor = selectionAnchor?.courtId === court.id && selectionAnchor.slotIndex === slotIndex;
-
-              return (
-                <button
-                  type="button"
-                  key={`${court.id}-${marker}`}
-                  className={`time-cell-grid cell-${slotStatus}${isSelected ? " cell-selected" : ""}${isAnchor ? " cell-anchor" : ""}`}
-                  onClick={() => handleCellClick(court.id, slotIndex)}
-                  disabled={slotStatus !== "free"}
-                  title={`${court.name} · ${marker}`}
-                  aria-label={`${court.name} ${marker}`}
-                />
-              );
-            })}
-          </div>
-        ))}
-      </section>
-
-      <section className="booking-grid-summary-card">
-        <div>
-          <p>Tóm tắt chọn giờ</p>
-          <strong>{startTime && endTime ? `${startTime} - ${endTime}` : "Chưa chọn khung giờ"}</strong>
-          <small>{selectedCourt ? `${selectedCourt.name} · ${selectedDate}` : "Chưa chọn sân"}</small>
-        </div>
-        <div className="booking-grid-summary-actions">
-          <Button variant="ghost" onClick={() => setShowClearSelectionModal(true)} disabled={!startTime || !endTime}>
-            Xóa lựa chọn
-          </Button>
-          <Button variant="primary" onClick={goNext}>
-            Tiếp tục checkout
-          </Button>
-        </div>
-      </section>
-
-      <button type="button" className="primary-bottom-btn" onClick={goNext}>
-        TIẾP THEO
-      </button>
+      <BookingSummary
+        title={selectedRange ? `${selectedStart} - ${selectedEnd}` : "Chưa chọn khung giờ"}
+        subtitle={selectedCourt ? `${selectedCourt.name} · ${selectedDate}` : "Chọn sân và chạm trên bảng thời gian"}
+        duration={selectedRange ? `${selectedHours.toFixed(1)} giờ` : "-"}
+        note={selectedRange ? `${selectedSlotCount} slot (30 phút/slot)` : "Chưa có dữ liệu"}
+        ctaLabel="Tiếp tục đặt sân"
+        onNext={goNext}
+        disabled={!selectedRange}
+      />
 
       <Modal
         open={showClearSelectionModal}

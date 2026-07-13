@@ -29,6 +29,8 @@ export function OpsPortalPage() {
 
   const [venueName, setVenueName] = useState("");
   const [venueAddress, setVenueAddress] = useState("");
+  const [editVenueName, setEditVenueName] = useState("");
+  const [editVenueAddress, setEditVenueAddress] = useState("");
   const [selectedVenueId, setSelectedVenueId] = useState("");
   const [courtName, setCourtName] = useState("");
   const [sportType, setSportType] = useState(sports[0]);
@@ -108,6 +110,11 @@ export function OpsPortalPage() {
     void loadVenueData(selectedVenueId);
   }, [loadVenueData, selectedVenueId]);
 
+  useEffect(() => {
+    setEditVenueName(selectedVenue?.name ?? "");
+    setEditVenueAddress(selectedVenue?.address ?? "");
+  }, [selectedVenue?.address, selectedVenue?.id, selectedVenue?.name]);
+
   async function createVenue() {
     if (!token?.accessToken) {
       setError("Cần đăng nhập OWNER/ADMIN");
@@ -132,6 +139,44 @@ export function OpsPortalPage() {
       setNotice("Đã tạo venue");
     } catch (err) {
       const uiError = toErrorPresentation(err, "Tạo venue thất bại");
+      setError(uiError.message);
+      setTraceId(uiError.traceId ?? null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateVenue() {
+    if (!token?.accessToken || !selectedVenueId) {
+      setError("Cần đăng nhập và chọn venue");
+      setTraceId(null);
+      return;
+    }
+
+    const nextName = editVenueName.trim();
+    const nextAddress = editVenueAddress.trim();
+    if (!nextName || !nextAddress) {
+      setError("Tên venue và địa chỉ không được bỏ trống");
+      setTraceId(null);
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setError(null);
+      setTraceId(null);
+      setNotice(null);
+      const updated = await apiFetch<Venue>(`/api/core/venues/${selectedVenueId}`, {
+        method: "PUT",
+        headers: {
+          "Idempotency-Key": createIdempotencyKey("ops-venue-update"),
+        },
+        body: JSON.stringify({ name: nextName, address: nextAddress }),
+      }, token.accessToken);
+      setVenues((current) => current.map((venue) => (venue.id === updated.id ? updated : venue)));
+      setNotice("Đã cập nhật thông tin venue");
+    } catch (err) {
+      const uiError = toErrorPresentation(err, "Cập nhật venue thất bại");
       setError(uiError.message);
       setTraceId(uiError.traceId ?? null);
     } finally {
@@ -417,6 +462,43 @@ export function OpsPortalPage() {
           <label>Tên venue <input value={venueName} onChange={(e) => setVenueName(e.target.value)} /></label>
           <label>Địa chỉ <input value={venueAddress} onChange={(e) => setVenueAddress(e.target.value)} /></label>
           <button className="btn" onClick={() => { void createVenue(); }} disabled={busy || !canWrite}>Tạo venue</button>
+
+          <hr />
+
+          <h4>Chỉnh sửa venue hiện tại</h4>
+          <label>Tên venue
+            <input
+              value={editVenueName}
+              onChange={(e) => setEditVenueName(e.target.value)}
+              disabled={!selectedVenueId}
+            />
+          </label>
+          <label>Địa chỉ
+            <input
+              value={editVenueAddress}
+              onChange={(e) => setEditVenueAddress(e.target.value)}
+              disabled={!selectedVenueId}
+            />
+          </label>
+          <div className="ops-action-row">
+            <button
+              className="btn"
+              onClick={() => { void updateVenue(); }}
+              disabled={busy || !canWrite || !selectedVenueId}
+            >
+              Lưu thay đổi
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setEditVenueName(selectedVenue?.name ?? "");
+                setEditVenueAddress(selectedVenue?.address ?? "");
+              }}
+              disabled={busy || !selectedVenueId}
+            >
+              Hoàn tác
+            </button>
+          </div>
 
           <hr />
 

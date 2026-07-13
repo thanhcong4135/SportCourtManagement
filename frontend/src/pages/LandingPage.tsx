@@ -1,20 +1,13 @@
-﻿import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { z } from "zod";
-import { Button, InputField, SelectField } from "../components/ui";
+import { HeroSearchBox } from "../components/booking/HeroSearchBox";
+import { SportCategoryCard } from "../components/booking/SportCategoryCard";
+import { VenueCard } from "../components/booking/VenueCard";
+import { Button, SkeletonCard } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
+import { sportCategories, venueGalleryPlaceholders } from "../data/mockMedia";
+import { useDiscoverData } from "../features/venues/useDiscoverData";
 import { trackEvent } from "../lib/analytics";
-import { getApiBaseUrl } from "../lib/api";
-
-const quickSearchSchema = z.object({
-  q: z.string().trim().min(1, "Vui lòng nhập địa điểm hoặc tên sân"),
-  sport: z.string().trim().min(1),
-  date: z.string().trim().min(1),
-  time: z.string().trim().min(1),
-});
-
-type QuickSearchValues = z.infer<typeof quickSearchSchema>;
 
 function getTodayIsoDate() {
   const now = new Date();
@@ -24,132 +17,186 @@ function getTodayIsoDate() {
   return `${y}-${m}-${d}`;
 }
 
-const sportOptions = [
-  { label: "PICKLEBALL", value: "PICKLEBALL" },
-  { label: "BADMINTON", value: "BADMINTON" },
-  { label: "TENNIS", value: "TENNIS" },
-];
-
-const featuredQuickLinks = [
-  { title: "Sân gần bạn", subtitle: "Ưu tiên khoảng cách gần", to: "/discover?sort=NEAREST" },
-  { title: "Giá dễ đặt", subtitle: "Ưu tiên dưới 100.000đ", to: "/discover?price=UNDER_100K&sort=PRICE_LOW" },
-  { title: "Giờ cao điểm", subtitle: "Xem nhanh slot tối nay", to: "/discover?sport=PICKLEBALL" },
+const stepItems = [
+  { title: "Tìm sân phù hợp", desc: "Chọn môn thể thao, khu vực và ngày chơi." },
+  { title: "Chọn khung giờ trống", desc: "Xem trạng thái slot theo từng sân con." },
+  { title: "Xác nhận & thanh toán", desc: "Đặt cọc hoặc thanh toán theo hình thức phù hợp." },
 ];
 
 export function LandingPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, token } = useAuth();
-  const form = useForm<QuickSearchValues>({
-    resolver: zodResolver(quickSearchSchema),
-    defaultValues: {
-      q: "",
-      sport: "PICKLEBALL",
-      date: getTodayIsoDate(),
-      time: "18:00",
-    },
-  });
+  const { isAuthenticated } = useAuth();
+  const discoverQuery = useDiscoverData();
 
-  function onSubmit(values: QuickSearchValues) {
-    trackEvent("funnel_landing_search_submit", {
-      sport: values.sport,
-      date: values.date,
-      time: values.time,
-      keywordLength: values.q.trim().length,
-    });
-    const params = new URLSearchParams({
-      q: values.q,
-      sport: values.sport,
-      date: values.date,
-      time: values.time,
-    });
+  const [keyword, setKeyword] = useState("");
+  const [sport, setSport] = useState("PICKLEBALL");
+  const [area, setArea] = useState("ALL");
+  const [date, setDate] = useState(getTodayIsoDate());
+  const [isSearchFormVisible, setIsSearchFormVisible] = useState(false);
+
+  const areaOptions = useMemo(() => {
+    const options = (discoverQuery.data?.venues ?? [])
+      .map((venue) => ({ label: venue.address, value: venue.id }));
+    return [{ label: "Tất cả khu vực", value: "ALL" }, ...options];
+  }, [discoverQuery.data?.venues]);
+
+  const sportOptions = [
+    { label: "Pickleball", value: "PICKLEBALL" },
+    { label: "Cầu lông", value: "BADMINTON" },
+    { label: "Tennis", value: "TENNIS" },
+    { label: "Bóng đá", value: "FOOTBALL" },
+  ];
+
+  const featuredCards = useMemo(() => {
+    const venues = discoverQuery.data?.venues ?? [];
+    const courtsByVenue = discoverQuery.data?.courtsByVenue ?? {};
+    return venues
+      .flatMap((venue) => (courtsByVenue[venue.id] ?? []).slice(0, 1).map((court) => ({ venue, court })))
+      .slice(0, 6);
+  }, [discoverQuery.data?.courtsByVenue, discoverQuery.data?.venues]);
+
+  function goSearch() {
+    trackEvent("landing_search_submit", { sport, area, date, hasKeyword: Boolean(keyword.trim()) });
+    const params = new URLSearchParams();
+    if (keyword.trim()) {
+      params.set("q", keyword.trim());
+    }
+    if (sport !== "ALL") {
+      params.set("sport", sport);
+    }
+    if (date) {
+      params.set("date", date);
+    }
     navigate(`/discover?${params.toString()}`);
   }
 
   return (
-    <main className="landing-page">
-      <section className="landing-hero">
-        <div className="landing-hero-content">
-          <p className="landing-kicker">Booking-first experience</p>
-          <h1>Tìm sân nhanh, xem giờ trống, đặt lịch online trong vài bước</h1>
-          <p>
-            Trang chủ tập trung vào hành trình đặt sân: tìm sân phù hợp, lọc theo môn và thời gian,
-            sau đó đi thẳng vào màn chọn slot trực quan.
-          </p>
-          <div className="landing-actions">
-            <Link
-              to="/discover"
-              className="ui-button ui-button--secondary ui-button--md"
-              onClick={() => trackEvent("funnel_landing_explore_click")}
-            >
-              Khám phá tất cả sân
-            </Link>
-            <Link
-              to={isAuthenticated ? "/account" : "/auth/login"}
-              className="ui-button ui-button--secondary ui-button--md"
-              onClick={() => trackEvent("funnel_landing_auth_cta_click", { authenticated: isAuthenticated })}
-            >
-              {isAuthenticated ? "Tài khoản" : "Đăng nhập"}
-            </Link>
+    <main className="sportcourt-home">
+      <header className="home-topnav">
+        <Link to="/" className="brand">
+          <span className="brand-mark">SC</span>
+          <div>
+            <strong>SportCourtManagement</strong>
+            <small>Nền tảng đặt sân thể thao</small>
           </div>
-          {isAuthenticated && token?.email ? (
-            <p className="landing-api">Đang đăng nhập: <code>{token.email}</code></p>
-          ) : null}
-          <p className="landing-api">API base: <code>{getApiBaseUrl()}</code></p>
-        </div>
+        </Link>
+        <nav>
+          <Link to="/discover">Khám phá sân</Link>
+          <Link to="/account">Lịch đã đặt</Link>
+          <Link to="/ops">Vận hành sân</Link>
+        </nav>
+        <Link to={isAuthenticated ? "/account" : "/auth/login"} className="pill-link">
+          {isAuthenticated ? "Tài khoản" : "Đăng nhập"}
+        </Link>
+      </header>
 
-        <form className="landing-search-card" onSubmit={form.handleSubmit(onSubmit)}>
-          <h3>Tìm nhanh khung giờ phù hợp</h3>
-          <InputField
-            label="Khu vực / tên sân"
-            placeholder="Ví dụ: Gò Vấp, Thủ Đức, Pickleball"
-            {...form.register("q")}
-            error={form.formState.errors.q?.message}
-          />
-          <div className="landing-search-grid">
-            <SelectField
-              label="Môn thể thao"
-              options={sportOptions}
-              {...form.register("sport")}
-              error={form.formState.errors.sport?.message}
-            />
-            <InputField
-              label="Ngày chơi"
-              type="date"
-              {...form.register("date")}
-              error={form.formState.errors.date?.message}
-            />
-            <InputField
-              label="Giờ mong muốn"
-              type="time"
-              {...form.register("time")}
-              error={form.formState.errors.time?.message}
-            />
+      <section className="home-hero">
+        <div className="home-hero-copy">
+          <h1>Tìm sân, chọn giờ trống và hoàn tất đặt lịch trong vài phút</h1>
+          <p>
+            Nền tảng đặt sân thể thao giúp người chơi tìm sân nhanh chóng, chọn lịch trống chính xác và hỗ trợ chủ sân
+            quản lý vận hành hiệu quả
+          </p>
+        </div>
+        <div className="hero-search-area">
+          <div className="hero-top-actions">
+            <Link to="/discover" className="ui-button ui-button--secondary ui-button--lg">Xem toàn bộ sân</Link>
+            <Button
+              variant="primary"
+              size="lg"
+              aria-expanded={isSearchFormVisible}
+              aria-controls="hero-search-form"
+              onClick={() => setIsSearchFormVisible((visible) => !visible)}
+            >
+              {isSearchFormVisible ? "Đóng tìm kiếm" : "Tìm sân gần bạn"}
+            </Button>
           </div>
-          <Button type="submit" variant="primary" size="lg" fullWidth>
-            Tìm sân ngay
-          </Button>
-        </form>
+          {isSearchFormVisible ? (
+            <HeroSearchBox
+              keyword={keyword}
+              sport={sport}
+              area={area}
+              date={date}
+              onKeywordChange={setKeyword}
+              onSportChange={setSport}
+              onAreaChange={setArea}
+              onDateChange={setDate}
+              onSubmit={goSearch}
+              autoFocusKeyword
+              sportOptions={sportOptions}
+              areaOptions={areaOptions}
+              submitLabel="Tìm sân trống"
+            />
+          ) : null}
+        </div>
       </section>
 
-      <section className="landing-featured">
-        <header>
-          <h2>Khám phá nhanh theo nhu cầu phổ biến</h2>
-          <p>Chọn nhanh một kịch bản để đi thẳng vào danh sách sân đã lọc.</p>
-        </header>
-        <div className="landing-featured-grid">
-          {featuredQuickLinks.map((item) => (
-            <Link
-              key={item.title}
-              to={item.to}
-              className="landing-featured-card"
-              onClick={() => trackEvent("funnel_landing_quick_link_click", { title: item.title, to: item.to })}
-            >
-              <strong>{item.title}</strong>
-              <span>{item.subtitle}</span>
-            </Link>
+      <section className="home-section">
+        <div className="sport-category-grid">
+          {sportCategories.map((item) => (
+            <SportCategoryCard
+              key={item.key}
+              title={item.label}
+              description={item.desc}
+              backgroundImage={item.backgroundImage}
+              to={`/discover?sport=${item.key}`}
+            />
           ))}
         </div>
+      </section>
+
+      <section className="home-section">
+        <div className="section-title">
+          <h2>Sân/chi nhánh nổi bật</h2>
+          <p>Những sân được tìm kiếm nhiều trong tuần này.</p>
+        </div>
+        <div className="featured-venues-grid">
+          {discoverQuery.isLoading ? <SkeletonCard count={3} /> : null}
+          {!discoverQuery.isLoading && featuredCards.map((row, index) => (
+            <VenueCard
+              key={`${row.venue.id}-${row.court.id}`}
+              venueName={row.venue.name}
+              courtName={row.court.name}
+              sportType={row.court.sportType}
+              address={row.venue.address}
+              distanceKm={Number((index + 2.2).toFixed(1))}
+              rating={Number((4.4 + ((index % 4) * 0.1)).toFixed(1))}
+              openingHours="05:00 - 24:00"
+              priceLabel="Từ 120.000đ"
+              availabilityLabel="Còn slot"
+              availabilityVariant="success"
+              amenities={["Bãi xe", "Nhà tắm", "Nước uống"]}
+              bannerStyle={venueGalleryPlaceholders[index % venueGalleryPlaceholders.length]}
+              onBook={() => navigate(`/venues/${row.venue.id}?courtId=${row.court.id}`)}
+              actionLabel="Đặt sân"
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="home-section home-steps">
+        <div className="section-title">
+          <h2>Đặt sân trong 3 bước</h2>
+          <p>Luồng đặt sân tối ưu cho mobile và desktop.</p>
+        </div>
+        <div className="steps-grid">
+          {stepItems.map((item, index) => (
+            <article key={item.title} className="step-card">
+              <span>{index + 1}</span>
+              <strong>{item.title}</strong>
+              <p>{item.desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-cta">
+        <h3>Sẵn sàng đặt lịch cho buổi chơi tiếp theo?</h3>
+        <p>Vào ngay màn khám phá để xem lịch trống theo thời gian thực.</p>
+        <Button variant="primary" size="lg" onClick={() => navigate("/discover")}>Bắt đầu đặt sân</Button>
       </section>
     </main>
   );
 }
+
+export default LandingPage;

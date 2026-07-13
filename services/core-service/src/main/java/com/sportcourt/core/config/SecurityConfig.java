@@ -60,6 +60,8 @@ public class SecurityConfig {
                 .permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/core/venues/**", "/api/core/courts/**")
                 .hasAnyRole("ADMIN", "OWNER")
+                .requestMatchers(HttpMethod.PUT, "/api/core/venues/**")
+                .hasAnyRole("ADMIN", "OWNER")
                 .requestMatchers(HttpMethod.POST, "/api/core/pricing-rules/**")
                 .hasAnyRole("ADMIN", "OWNER")
                 .requestMatchers(HttpMethod.POST, "/api/core/products/**")

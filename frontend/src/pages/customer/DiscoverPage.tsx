@@ -1,40 +1,29 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { BottomNavigation } from "../../components/BottomNavigation";
-import {
-  Button,
-  Drawer,
-  EmptyState,
-  ErrorState,
-  SelectField,
-  SkeletonCard,
-  StatusBadge,
-  Tabs,
-  useToast,
-} from "../../components/ui";
+import { VenueCard } from "../../components/booking/VenueCard";
+import { VenueFilter } from "../../components/booking/VenueFilter";
+import { EmptyState, ErrorState, SkeletonCard } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import { defaultVenueAmenities, venueGalleryPlaceholders } from "../../data/mockMedia";
 import { useDiscoverData } from "../../features/venues/useDiscoverData";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import { trackEvent } from "../../lib/analytics";
 import { formatCurrency } from "../../lib/api";
-import {
-  type Court,
-  type Venue,
-  buildOffsetIso,
-  checkAvailability,
-  quoteBooking,
-} from "../../lib/coreApi";
+import { buildOffsetIso, checkAvailability, quoteBooking } from "../../lib/coreApi";
 import { toErrorPresentation } from "../../lib/errorPresentation";
 
-type SortValue = "POPULAR" | "NEAREST" | "PRICE_LOW" | "AVAILABILITY";
+type SortValue = "POPULAR" | "NEAREST" | "PRICE_LOW";
 type PriceValue = "ALL" | "UNDER_100K" | "FROM_100K_TO_150K" | "ABOVE_150K";
 
 type DiscoverCard = {
-  venue: Venue;
-  court: Court;
+  venueId: string;
+  venueName: string;
+  venueAddress: string;
+  courtId: string;
+  courtName: string;
+  sportType: string;
   rating: number;
   distanceKm: number;
-  openingHours: string;
 };
 
 type CardInsight = {
@@ -42,18 +31,10 @@ type CardInsight = {
   quote: number | null;
 };
 
-const demoBanners = [
-  "linear-gradient(132deg, #67cfd7 0%, #2f8cb6 52%, #2f586f 100%)",
-  "linear-gradient(132deg, #8dc87f 0%, #42996c 52%, #1f6c57 100%)",
-  "linear-gradient(132deg, #8db5ff 0%, #4c6cd4 52%, #22266a 100%)",
-  "linear-gradient(132deg, #ffd579 0%, #eca34f 55%, #ab5f29 100%)",
-];
-
 const sortOptions = [
   { label: "Phổ biến", value: "POPULAR" },
   { label: "Gần nhất", value: "NEAREST" },
   { label: "Giá thấp", value: "PRICE_LOW" },
-  { label: "Còn nhiều slot", value: "AVAILABILITY" },
 ];
 
 const priceOptions = [
@@ -63,21 +44,26 @@ const priceOptions = [
   { label: "> 150.000đ", value: "ABOVE_150K" },
 ];
 
-const defaultHours = "05:00 - 24:00";
+const sportOptions = [
+  { label: "Tất cả môn", value: "ALL" },
+  { label: "Pickleball", value: "PICKLEBALL" },
+  { label: "Cầu lông", value: "BADMINTON" },
+  { label: "Tennis", value: "TENNIS" },
+  { label: "Bóng đá", value: "FOOTBALL" },
+];
 
-function randomBySeed(seed: string, min: number, max: number) {
-  const acc = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const normalized = (acc % 1000) / 1000;
-  return min + normalized * (max - min);
+function normalizeSort(value: string | null): SortValue {
+  if (value === "NEAREST" || value === "PRICE_LOW") {
+    return value;
+  }
+  return "POPULAR";
 }
 
-function todayLabel() {
-  return new Intl.DateTimeFormat("vi-VN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date());
+function normalizePrice(value: string | null): PriceValue {
+  if (value === "UNDER_100K" || value === "FROM_100K_TO_150K" || value === "ABOVE_150K") {
+    return value;
+  }
+  return "ALL";
 }
 
 function getTodayIsoDate() {
@@ -96,20 +82,14 @@ function add30Minutes(hhmm: string) {
   return `${nextHour}:${nextMinute}`;
 }
 
-function normalizeSort(value: string | null): SortValue {
-  const allowed: SortValue[] = ["POPULAR", "NEAREST", "PRICE_LOW", "AVAILABILITY"];
-  if (value && allowed.includes(value as SortValue)) {
-    return value as SortValue;
-  }
-  return "POPULAR";
+function createDistance(seed: string): number {
+  const sum = Array.from(seed).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return Number(((sum % 120) / 10 + 1.2).toFixed(1));
 }
 
-function normalizePrice(value: string | null): PriceValue {
-  const allowed: PriceValue[] = ["ALL", "UNDER_100K", "FROM_100K_TO_150K", "ABOVE_150K"];
-  if (value && allowed.includes(value as PriceValue)) {
-    return value as PriceValue;
-  }
-  return "ALL";
+function createRating(seed: string): number {
+  const sum = Array.from(seed).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return Number((4.2 + ((sum % 8) * 0.1)).toFixed(1));
 }
 
 function matchPriceFilter(quote: number | null, filter: PriceValue): boolean {
@@ -128,45 +108,30 @@ function matchPriceFilter(quote: number | null, filter: PriceValue): boolean {
   return quote > 150_000;
 }
 
-function toDiscoverCards(venues: Venue[], courtsByVenue: Record<string, Court[]>): DiscoverCard[] {
-  return venues.flatMap((venue) => {
-    const venueCourts = courtsByVenue[venue.id] ?? [];
-    return venueCourts.map((court) => ({
-      venue,
-      court,
-      rating: Number(randomBySeed(court.id, 4.2, 5.0).toFixed(1)),
-      distanceKm: Number(randomBySeed(`${court.id}-dist`, 1.3, 12.8).toFixed(1)),
-      openingHours: defaultHours,
-    }));
-  });
-}
-
 export function DiscoverPage() {
   const navigate = useNavigate();
   const { token, isAuthenticated } = useAuth();
-  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState(searchParams.get("q") ?? "");
-  const [isFilterDrawerOpen, setFilterDrawerOpen] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(18);
-  const [cardInsights, setCardInsights] = useState<Record<string, CardInsight>>({});
-  const debouncedSearch = useDebouncedValue(searchInput, 350);
+  const debouncedSearch = useDebouncedValue(searchInput, 250);
 
-  const sportFilter = searchParams.get("sport") ?? "ALL";
   const sortValue = normalizeSort(searchParams.get("sort"));
+  const sportFilter = searchParams.get("sport") ?? "ALL";
+  const areaFilter = searchParams.get("area") ?? "ALL";
   const priceFilter = normalizePrice(searchParams.get("price"));
-  const keyword = (searchParams.get("q") ?? "").trim().toLowerCase();
   const selectedDate = searchParams.get("date") ?? getTodayIsoDate();
   const selectedTime = searchParams.get("time") ?? "18:00";
+
   const discoverQuery = useDiscoverData();
-  const errorUi = discoverQuery.error ? toErrorPresentation(discoverQuery.error, "Không tải được dữ liệu sân") : null;
+  const errorUi = discoverQuery.error ? toErrorPresentation(discoverQuery.error, "Không tải được danh sách sân") : null;
+
+  const [insights, setInsights] = useState<Record<string, CardInsight>>({});
 
   useEffect(() => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
-      const normalized = debouncedSearch.trim();
-      if (normalized) {
-        next.set("q", normalized);
+      if (debouncedSearch.trim()) {
+        next.set("q", debouncedSearch.trim());
       } else {
         next.delete("q");
       }
@@ -174,168 +139,95 @@ export function DiscoverPage() {
     }, { replace: true });
   }, [debouncedSearch, setSearchParams]);
 
-  const sportOptions = useMemo(() => {
-    const mapped = new Set<string>();
-    Object.values(discoverQuery.data?.courtsByVenue ?? {}).forEach((courts) => {
-      courts.forEach((court) => mapped.add(court.sportType.toUpperCase()));
-    });
-    return [
-      { label: "Tất cả môn", value: "ALL" },
-      ...Array.from(mapped).sort().map((sport) => ({ label: sport, value: sport })),
-    ];
-  }, [discoverQuery.data?.courtsByVenue]);
+  const areaOptions = useMemo(() => {
+    const rows = discoverQuery.data?.venues ?? [];
+    return [{ label: "Tất cả khu vực", value: "ALL" }, ...rows.map((venue) => ({ label: venue.address, value: venue.id }))];
+  }, [discoverQuery.data?.venues]);
 
   const cards = useMemo(() => {
-    const source = toDiscoverCards(discoverQuery.data?.venues ?? [], discoverQuery.data?.courtsByVenue ?? {});
+    const venues = discoverQuery.data?.venues ?? [];
+    const courtsByVenue = discoverQuery.data?.courtsByVenue ?? {};
+    const keyword = (searchParams.get("q") ?? "").toLowerCase();
 
-    const filtered = source.filter((card) => {
-      const matchSport = sportFilter === "ALL" || card.court.sportType.toUpperCase() === sportFilter;
-      const quote = cardInsights[card.court.id]?.quote ?? null;
+    const mapped: DiscoverCard[] = venues.flatMap((venue) => (courtsByVenue[venue.id] ?? []).map((court) => ({
+      venueId: venue.id,
+      venueName: venue.name,
+      venueAddress: venue.address,
+      courtId: court.id,
+      courtName: court.name,
+      sportType: court.sportType,
+      rating: createRating(court.id),
+      distanceKm: createDistance(court.id),
+    })));
+
+    const filtered = mapped.filter((card) => {
+      const matchKeyword = !keyword
+        || card.venueName.toLowerCase().includes(keyword)
+        || card.venueAddress.toLowerCase().includes(keyword)
+        || card.courtName.toLowerCase().includes(keyword);
+      const matchSport = sportFilter === "ALL" || card.sportType.toUpperCase() === sportFilter;
+      const matchArea = areaFilter === "ALL" || card.venueId === areaFilter;
+      const quote = insights[card.courtId]?.quote ?? null;
       const matchPrice = matchPriceFilter(quote, priceFilter);
-      if (!matchSport || !matchPrice) {
-        return false;
-      }
-      if (!keyword) {
-        return true;
-      }
-      return (
-        card.venue.name.toLowerCase().includes(keyword)
-        || card.venue.address.toLowerCase().includes(keyword)
-        || card.court.name.toLowerCase().includes(keyword)
-      );
+      return matchKeyword && matchSport && matchArea && matchPrice;
     });
 
     return filtered.sort((left, right) => {
-      switch (sortValue) {
-        case "NEAREST":
-          return left.distanceKm - right.distanceKm;
-        case "PRICE_LOW": {
-          const leftPrice = cardInsights[left.court.id]?.quote ?? Number.MAX_SAFE_INTEGER;
-          const rightPrice = cardInsights[right.court.id]?.quote ?? Number.MAX_SAFE_INTEGER;
-          if (leftPrice !== rightPrice) {
-            return leftPrice - rightPrice;
-          }
-          return right.rating - left.rating;
-        }
-        case "AVAILABILITY": {
-          const leftAvailability = cardInsights[left.court.id]?.availability;
-          const rightAvailability = cardInsights[right.court.id]?.availability;
-          const toRank = (value: boolean | null | undefined) => {
-            if (value === true) {
-              return 0;
-            }
-            if (value === null || value === undefined) {
-              return 1;
-            }
-            return 2;
-          };
-          const rank = toRank(leftAvailability) - toRank(rightAvailability);
-          if (rank !== 0) {
-            return rank;
-          }
-          return right.rating - left.rating;
-        }
-        default:
-          return right.rating - left.rating;
+      if (sortValue === "NEAREST") {
+        return left.distanceKm - right.distanceKm;
       }
+      if (sortValue === "PRICE_LOW") {
+        const leftPrice = insights[left.courtId]?.quote ?? Number.MAX_SAFE_INTEGER;
+        const rightPrice = insights[right.courtId]?.quote ?? Number.MAX_SAFE_INTEGER;
+        return leftPrice - rightPrice;
+      }
+      return right.rating - left.rating;
     });
-  }, [cardInsights, discoverQuery.data?.courtsByVenue, discoverQuery.data?.venues, keyword, sortValue, sportFilter, priceFilter]);
-
-  const visibleCards = useMemo(() => cards.slice(0, visibleCount), [cards, visibleCount]);
+  }, [areaFilter, discoverQuery.data?.courtsByVenue, discoverQuery.data?.venues, insights, priceFilter, searchParams, sortValue, sportFilter]);
 
   useEffect(() => {
-    if (!visibleCards.length) {
+    if (!cards.length) {
       return;
     }
+    let canceled = false;
+    const startIso = buildOffsetIso(selectedDate, selectedTime);
+    const endIso = buildOffsetIso(selectedDate, add30Minutes(selectedTime));
 
-    let cancelled = false;
+    async function loadInsights() {
+      const rows = await Promise.all(cards.slice(0, 24).map(async (card) => {
+        const availability = await checkAvailability(card.courtId, startIso, endIso)
+          .then((response) => response.available)
+          .catch(() => null);
+        const quote = isAuthenticated
+          ? await quoteBooking(card.courtId, startIso, endIso).then((response) => response.totalPrice).catch(() => null)
+          : null;
+        return [card.courtId, { availability, quote }] as const;
+      }));
 
-    async function loadCardInsights() {
-      const startIso = buildOffsetIso(selectedDate, selectedTime);
-      const endIso = buildOffsetIso(selectedDate, add30Minutes(selectedTime));
-      const entries = await Promise.all(
-        visibleCards.map(async (card) => {
-          const availabilityPromise = checkAvailability(card.court.id, startIso, endIso)
-            .then((response) => response.available)
-            .catch(() => null);
-          const quotePromise = isAuthenticated
-            ? quoteBooking(card.court.id, startIso, endIso)
-              .then((response) => response.totalPrice)
-              .catch(() => null)
-            : Promise.resolve(null);
-          const [availability, quote] = await Promise.all([availabilityPromise, quotePromise]);
-          return [card.court.id, { availability, quote }] as const;
-        }),
-      );
-
-      if (cancelled) {
+      if (canceled) {
         return;
       }
-
-      setCardInsights((previous) => ({
-        ...previous,
-        ...Object.fromEntries(entries),
-      }));
+      setInsights((prev) => ({ ...prev, ...Object.fromEntries(rows) }));
     }
 
-    void loadCardInsights();
-
+    void loadInsights();
     return () => {
-      cancelled = true;
+      canceled = true;
     };
-  }, [visibleCards, selectedDate, selectedTime, isAuthenticated]);
+  }, [cards, isAuthenticated, selectedDate, selectedTime]);
 
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (keyword) {
-      count += 1;
-    }
-    if (sportFilter !== "ALL") {
-      count += 1;
-    }
-    if (priceFilter !== "ALL") {
-      count += 1;
-    }
-    if (sortValue !== "POPULAR") {
-      count += 1;
-    }
-    return count;
-  }, [keyword, sportFilter, priceFilter, sortValue]);
+  const pendingCount = cards.filter((card) => insights[card.courtId]?.availability === true).length;
 
-  const suggestedDeposit = useMemo(() => {
-    const firstQuoted = cards
-      .map((card) => cardInsights[card.court.id]?.quote ?? null)
-      .find((value): value is number => typeof value === "number");
-    if (firstQuoted === undefined) {
-      return null;
-    }
-    return Math.ceil((firstQuoted * 0.5) / 1000) * 1000;
-  }, [cards, cardInsights]);
+  const quickDateLabel = useMemo(() => (
+    new Intl.DateTimeFormat("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date())
+  ), []);
 
-  function openBooking(card: DiscoverCard) {
-    const insight = cardInsights[card.court.id];
-    trackEvent("funnel_discover_book_click", {
-      venueId: card.venue.id,
-      courtId: card.court.id,
-      sportType: card.court.sportType,
-      priceFrom: insight?.quote ?? null,
-      distanceKm: card.distanceKm,
-      availability: insight?.availability,
-    });
-    const params = new URLSearchParams({
-      courtId: card.court.id,
-      date: selectedDate,
-    });
-    navigate(`/venues/${card.venue.id}?${params.toString()}`);
-  }
-
-  function updateFilter(key: "sport" | "sort" | "price", value: string) {
-    setVisibleCount(18);
+  function updateFilter(key: "sport" | "area" | "price" | "sort", value: string) {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
-      if (key === "sort" && value === "POPULAR") {
-        next.delete("sort");
-      } else if ((key === "sport" || key === "price") && value === "ALL") {
+      if ((key === "sport" || key === "area" || key === "price") && value === "ALL") {
+        next.delete(key);
+      } else if (key === "sort" && value === "POPULAR") {
         next.delete(key);
       } else {
         next.set(key, value);
@@ -345,18 +237,12 @@ export function DiscoverPage() {
   }
 
   function clearFilters() {
-    setVisibleCount(18);
-    trackEvent("funnel_discover_clear_filters", {
-      hadKeyword: Boolean(searchInput.trim()),
-      sportFilter,
-      priceFilter,
-      sortValue,
-    });
     setSearchInput("");
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete("q");
       next.delete("sport");
+      next.delete("area");
       next.delete("price");
       next.delete("sort");
       return next;
@@ -365,238 +251,91 @@ export function DiscoverPage() {
 
   return (
     <div className="alobo-screen discover-screen">
-      <div className="discover-sticky">
-        <header className="discover-hero">
-          <div className="discover-hero-row">
-            <div className="discover-avatar">SC</div>
-            <div>
-              <p className="discover-date">{todayLabel()}</p>
-              <h1>{isAuthenticated ? token?.email ?? "SportCourt" : "Khách"}</h1>
-            </div>
-            <div className="discover-hero-actions">
-              {!isAuthenticated ? (
-                <Link to="/auth/login" className="pill-link">
-                  Đăng nhập
-                </Link>
-              ) : (
-                <Link to="/account" className="pill-link">
-                  Tài khoản
-                </Link>
-              )}
-            </div>
+      <header className="discover-hero">
+        <div className="discover-hero-row">
+          <div className="discover-avatar">SC</div>
+          <div>
+            <p className="discover-date">{quickDateLabel}</p>
+            <h1>{isAuthenticated ? token?.email ?? "SportCourt" : "Khách đặt sân"}</h1>
           </div>
-        </header>
-
-        <section className="discover-toolbar discover-toolbar--grid">
-          <input
-            value={searchInput}
-            onChange={(event) => {
-              setVisibleCount(18);
-              setSearchInput(event.target.value);
-            }}
-            placeholder="Tìm kiếm sân, địa chỉ"
-          />
-          <div className="discover-toolbar-filters">
-            <SelectField
-              className="discover-toolbar-select"
-              options={sportOptions}
-              value={sportFilter}
-              onChange={(event) => updateFilter("sport", event.target.value)}
-            />
-            <SelectField
-              className="discover-toolbar-select"
-              options={priceOptions}
-              value={priceFilter}
-              onChange={(event) => updateFilter("price", event.target.value)}
-            />
-            <SelectField
-              className="discover-toolbar-select"
-              options={sortOptions}
-              value={sortValue}
-              onChange={(event) => updateFilter("sort", event.target.value)}
-            />
+          <div className="discover-hero-actions">
+            <Link to={isAuthenticated ? "/account" : "/auth/login"} className="pill-link">
+              {isAuthenticated ? "Tài khoản" : "Đăng nhập"}
+            </Link>
           </div>
-          <Button
-            className="discover-toolbar-btn discover-toolbar-btn-mobile"
-            variant="ghost"
-            onClick={() => setFilterDrawerOpen(true)}
-          >
-            Bộ lọc
-          </Button>
-          <Button
-            className="discover-toolbar-btn"
-            variant="secondary"
-            onClick={() => {
-              trackEvent("funnel_discover_map_click");
-              showToast({ title: "Bản đồ", message: "Tính năng bản đồ sẽ được bật ở phase sau.", variant: "info" });
-            }}
-          >
-            Bản đồ
-          </Button>
-          <Button
-            className="discover-toolbar-btn"
-            variant="secondary"
-            onClick={() => navigate("/account")}
-          >
-            Sân đã đặt
-          </Button>
-        </section>
-
-        <div className="discover-filter-summary">
-          <span>
-            {activeFilterCount > 0 ? `Đang áp dụng ${activeFilterCount} bộ lọc` : "Chưa áp dụng bộ lọc"}
-          </span>
-          {activeFilterCount > 0 ? (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              Xóa tất cả
-            </Button>
-          ) : null}
         </div>
-      </div>
+      </header>
+
+      <VenueFilter
+        keyword={searchInput}
+        sport={sportFilter}
+        area={areaFilter}
+        date={selectedDate}
+        price={priceFilter}
+        sort={sortValue}
+        sportOptions={sportOptions}
+        areaOptions={areaOptions}
+        priceOptions={priceOptions}
+        sortOptions={sortOptions}
+        onKeywordChange={setSearchInput}
+        onSportChange={(value) => updateFilter("sport", value)}
+        onAreaChange={(value) => updateFilter("area", value)}
+        onDateChange={(value) => setSearchParams((curr) => {
+          const next = new URLSearchParams(curr);
+          next.set("date", value);
+          return next;
+        }, { replace: true })}
+        onPriceChange={(value) => updateFilter("price", value)}
+        onSortChange={(value) => updateFilter("sort", value)}
+        onClear={clearFilters}
+      />
 
       {errorUi ? (
-        <ErrorState
-          message={errorUi.message}
-          traceId={errorUi.traceId}
-          onRetry={() => void discoverQuery.refetch()}
-        />
+        <ErrorState message={errorUi.message} traceId={errorUi.traceId} onRetry={() => void discoverQuery.refetch()} />
       ) : null}
 
       <section className="discover-results-head">
         <div>
-          <h2>Danh sách sân nổi bật</h2>
-          <p>{cards.length} sân phù hợp với bộ lọc hiện tại</p>
+          <h2>Danh sách sân</h2>
+          <p>{cards.length} sân phù hợp · {pendingCount} sân còn slot theo giờ đã chọn</p>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => showToast({ title: "Sắp mở", message: "Bộ sưu tập ưu đãi sẽ được bật ở phase sau.", variant: "info" })}
-        >
-          Ưu đãi hôm nay
-        </Button>
       </section>
 
       <section className="discover-grid">
         {discoverQuery.isLoading ? <SkeletonCard count={6} /> : null}
+        {!discoverQuery.isLoading && cards.map((card, index) => {
+          const insight = insights[card.courtId] ?? { availability: null, quote: null };
+          const availabilityLabel = insight.availability === true ? "Còn slot" : insight.availability === false ? "Đã kín" : "Đang kiểm tra";
+          const availabilityVariant = insight.availability === true ? "success" : insight.availability === false ? "danger" : "neutral";
+          const priceLabel = insight.quote !== null ? `Từ ${formatCurrency(insight.quote)}` : "Chưa có bảng giá";
 
-        {!discoverQuery.isLoading && !errorUi ? visibleCards.map((card, index) => {
-          const insight = cardInsights[card.court.id] ?? { availability: null, quote: null };
-          const availabilityLabel = insight.availability === true
-            ? "Còn chỗ"
-            : insight.availability === false
-              ? "Đã kín"
-              : "Đang cập nhật";
-          const availabilityVariant = insight.availability === true
-            ? "success"
-            : insight.availability === false
-              ? "danger"
-              : "neutral";
-          const priceLabel = insight.quote !== null
-            ? `Từ ${formatCurrency(insight.quote)}`
-            : isAuthenticated
-              ? "Chưa có bảng giá"
-              : "Đăng nhập để xem giá";
           return (
-            <article
-              className="discover-card"
-              key={`${card.venue.id}-${card.court.id}`}
-              data-venue-id={card.venue.id}
-              data-court-id={card.court.id}
-            >
-              <div className="discover-card-banner" style={{ background: demoBanners[index % demoBanners.length] }}>
-                <div className="discover-badges">
-                  <span className="badge rating">★ {card.rating}</span>
-                  <span className="badge quick">Đơn ngày</span>
-                  <span className="badge event">Sự kiện</span>
-                </div>
-              </div>
-              <div className="discover-card-body">
-                <div>
-                  <h3>{card.venue.name}</h3>
-                  <p className="distance">({card.distanceKm}km) {card.venue.address}</p>
-                  <p className="muted">{card.court.name} · {card.court.sportType}</p>
-                  <p className="muted">{card.openingHours}</p>
-                  <p className="muted">Khung giờ kiểm tra: {selectedDate} {selectedTime}</p>
-                  <div className="discover-card-meta">
-                    <StatusBadge
-                      variant={availabilityVariant}
-                      label={availabilityLabel}
-                    />
-                    <span className="discover-card-price">{priceLabel}</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="booking-cta"
-                  data-venue-id={card.venue.id}
-                  data-court-id={card.court.id}
-                  onClick={() => openBooking(card)}
-                >
-                  XEM LỊCH TRỐNG
-                </button>
-              </div>
-            </article>
+            <VenueCard
+              key={`${card.venueId}-${card.courtId}`}
+              venueName={card.venueName}
+              courtName={card.courtName}
+              sportType={card.sportType}
+              address={card.venueAddress}
+              distanceKm={card.distanceKm}
+              rating={card.rating}
+              openingHours="05:00 - 24:00"
+              priceLabel={priceLabel}
+              availabilityLabel={availabilityLabel}
+              availabilityVariant={availabilityVariant}
+              amenities={defaultVenueAmenities}
+              bannerStyle={venueGalleryPlaceholders[index % venueGalleryPlaceholders.length]}
+              onBook={() => navigate(`/venues/${card.venueId}?courtId=${card.courtId}&date=${selectedDate}`)}
+              actionLabel="Đặt sân"
+            />
           );
-        }) : null}
+        })}
       </section>
 
-      {!discoverQuery.isLoading && !errorUi && cards.length > visibleCards.length ? (
-        <div className="discover-load-more">
-          <Button variant="ghost" onClick={() => setVisibleCount((current) => current + 18)}>
-            Xem thêm ({cards.length - visibleCards.length} sân)
-          </Button>
-        </div>
+      {!discoverQuery.isLoading && cards.length === 0 ? (
+        <EmptyState title="Không tìm thấy sân phù hợp" description="Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm." />
       ) : null}
-
-      {!discoverQuery.isLoading && !errorUi && cards.length === 0 ? (
-        <EmptyState
-          title="Không tìm thấy sân phù hợp"
-          description="Thử xóa từ khóa hoặc đổi bộ lọc để xem thêm kết quả."
-        />
-      ) : null}
-
-      <section className="discover-summary">
-        <article>
-          <p>Tổng sân hiện có</p>
-          <strong>{cards.length}</strong>
-        </article>
-        <article>
-          <p>Gợi ý đặt cọc</p>
-          <strong>{suggestedDeposit !== null ? formatCurrency(suggestedDeposit) : "Đăng nhập để xem"}</strong>
-        </article>
-      </section>
 
       <BottomNavigation active="discover" />
-
-      <Drawer open={isFilterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} title="Bộ lọc tìm sân">
-        <div className="discover-drawer-filters">
-          <SelectField
-            label="Môn thể thao"
-            options={sportOptions}
-            value={sportFilter}
-            onChange={(event) => updateFilter("sport", event.target.value)}
-          />
-          <SelectField
-            label="Mức giá"
-            options={priceOptions}
-            value={priceFilter}
-            onChange={(event) => updateFilter("price", event.target.value)}
-          />
-          <label className="ui-field">
-            <span className="ui-field__label">Sắp xếp</span>
-            <Tabs value={sortValue} options={sortOptions} onChange={(next) => updateFilter("sort", next)} />
-          </label>
-          <div className="discover-drawer-actions">
-            <Button variant="ghost" onClick={clearFilters} fullWidth>
-              Xóa tất cả
-            </Button>
-            <Button variant="primary" onClick={() => setFilterDrawerOpen(false)} fullWidth>
-              Áp dụng
-            </Button>
-          </div>
-        </div>
-      </Drawer>
     </div>
   );
 }
-

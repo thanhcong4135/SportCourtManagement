@@ -124,6 +124,7 @@ export type PaymentTransactionStatus = "PENDING" | "SUCCESS" | "FAILED" | "CANCE
 
 export type PaymentTransaction = {
   id: string;
+  paymentRef?: string;
   bookingId: string;
   customerId: string;
   amount: number;
@@ -131,11 +132,33 @@ export type PaymentTransaction = {
   status: PaymentTransactionStatus;
   provider: string;
   providerReference?: string;
+  providerTransactionNo?: string;
+  bankCode?: string;
+  responseCode?: string;
+  transactionStatus?: string;
+  payDate?: string;
   checkoutUrl?: string;
   requestedAt: string;
+  updatedAt?: string;
   completedAt?: string;
   failureReason?: string;
   idempotencyKey: string;
+};
+
+export type VnpayCreatePaymentResponse = {
+  paymentId: string;
+  paymentRef: string;
+  paymentUrl: string;
+};
+
+export type PaymentByRefStatus = {
+  paymentRef: string;
+  bookingId: string;
+  amount: number;
+  provider: string;
+  status: PaymentTransactionStatus;
+  responseCode?: string;
+  transactionStatus?: string;
 };
 
 export async function listVenues() {
@@ -369,6 +392,38 @@ export async function initiateDepositPayment(payload: {
     },
   );
   return mapPaymentTransaction(response) as PaymentTransaction;
+}
+
+export async function createVnpayPayment(payload: {
+  bookingId: string;
+  customerId?: string;
+  amount: number;
+  customerName?: string;
+  customerPhone?: string;
+  orderInfo?: string;
+  bankCode?: string;
+  idempotencyKey?: string;
+}) {
+  return apiFetch<VnpayCreatePaymentResponse>(
+    "/api/payments/vnpay/create-payment",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        bookingId: payload.bookingId,
+        customerId: payload.customerId,
+        amount: payload.amount,
+        customerName: payload.customerName,
+        customerPhone: payload.customerPhone,
+        orderInfo: payload.orderInfo,
+        bankCode: payload.bankCode,
+        idempotencyKey: payload.idempotencyKey || createIdempotencyKey("payment-vnpay"),
+      }),
+    },
+  );
+}
+
+export async function getPaymentByRef(paymentRef: string) {
+  return apiFetch<PaymentByRefStatus>(`/api/payments/by-ref/${encodeURIComponent(paymentRef)}`);
 }
 
 export async function listPaymentByBooking(bookingId: string) {

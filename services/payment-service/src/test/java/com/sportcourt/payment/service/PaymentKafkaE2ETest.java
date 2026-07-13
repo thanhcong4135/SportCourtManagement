@@ -26,6 +26,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
@@ -45,7 +47,9 @@ import static org.assertj.core.api.Assertions.fail;
 @ActiveProfiles("test")
 @Testcontainers
 @TestPropertySource(properties = {
-    "kafka.consumer.booking.enabled=true"
+    "kafka.consumer.booking.enabled=true",
+    "outbox.publisher.enabled=true",
+    "outbox.publisher.fixed-delay-ms=100"
 })
 class PaymentKafkaE2ETest {
 
@@ -107,9 +111,11 @@ class PaymentKafkaE2ETest {
             assertThat(created.getStatus()).isEqualTo(PaymentTransactionStatus.PENDING);
             assertThat(created.getIdempotencyKey()).isEqualTo(eventId);
 
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Payment-Callback-Secret", "test-callback-secret");
             ResponseEntity<PaymentTransactionResponse> callbackResponse = restTemplate.postForEntity(
                 endpointUrl("/api/payments/callback"),
-                new PaymentCallbackRequest(created.getId(), "provider-ref-e2e", true, null),
+                new HttpEntity<>(new PaymentCallbackRequest(created.getId(), "provider-ref-e2e", true, null), headers),
                 PaymentTransactionResponse.class
             );
 
