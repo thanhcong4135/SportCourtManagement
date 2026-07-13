@@ -48,13 +48,15 @@ public class SecurityConfig {
     private final ApiSecurityErrorHandler apiSecurityErrorHandler;
     private final ResourceLoader resourceLoader;
 
-    public SecurityConfig(ApiSecurityErrorHandler apiSecurityErrorHandler, ResourceLoader resourceLoader) {
+    public SecurityConfig(ApiSecurityErrorHandler apiSecurityErrorHandler,
+                          ResourceLoader resourceLoader) {
         this.apiSecurityErrorHandler = apiSecurityErrorHandler;
         this.resourceLoader = resourceLoader;
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                            OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler) throws Exception {
         JwtAuthenticationConverter jwtAuthConverter = new JwtAuthenticationConverter();
         jwtAuthConverter.setJwtGrantedAuthoritiesConverter(jwt -> {
             Collection<String> roles = jwt.getClaimAsStringList("roles");
@@ -69,7 +71,7 @@ public class SecurityConfig {
 
         http
             .csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(apiSecurityErrorHandler)
                 .accessDeniedHandler(apiSecurityErrorHandler)
@@ -82,12 +84,16 @@ public class SecurityConfig {
                     "/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
-                    "/.well-known/jwks.json"
+                    "/.well-known/jwks.json",
+                    "/oauth2/**",
+                    "/login/oauth2/**"
                 ).permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/auth/oauth2/google").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout")
                 .permitAll()
                 .anyRequest().authenticated()
             )
+            .oauth2Login(oauth2 -> oauth2.successHandler(oAuth2LoginSuccessHandler))
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter)));
 
         return http.build();

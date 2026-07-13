@@ -36,6 +36,18 @@ public class UserAccount {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
+    @Column(name = "provider", nullable = false, length = 32)
+    private String provider = "LOCAL";
+
+    @Column(name = "provider_id", length = 128)
+    private String providerId;
+
+    @Column(name = "avatar_url", length = 512)
+    private String avatarUrl;
+
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
     @Column(name = "display_name", nullable = false, length = 120)
     private String displayName;
 

@@ -14,6 +14,13 @@ spring:
           time_zone: UTC
   flyway:
     enabled: false
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-google-client-id
+            client-secret: test-google-client-secret
 
 app:
   security:

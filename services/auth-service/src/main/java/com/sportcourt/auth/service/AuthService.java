@@ -37,11 +37,15 @@ import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class AuthService {
+
+    private static final String PROVIDER_LOCAL = "LOCAL";
+    private static final String PROVIDER_GOOGLE = "GOOGLE";
 
     private final UserAccountRepository userAccountRepository;
     private final RoleRepository roleRepository;
@@ -80,6 +84,8 @@ public class AuthService {
         UserAccount user = new UserAccount();
         user.setEmail(request.email().trim().toLowerCase());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setProvider(PROVIDER_LOCAL);
+        user.setEmailVerified(false);
         user.setDisplayName(request.displayName().trim());
         user.setStatus(UserStatus.ACTIVE);
         user.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
@@ -103,6 +109,53 @@ public class AuthService {
         }
 
         return issueTokens(user);
+    }
+
+    @Transactional
+    public AuthTokenResponse loginWithGoogle(String email,
+                                             String name,
+                                             String sub,
+                                             String picture,
+                                             Boolean emailVerified) {
+        String normalizedEmail = normalizeRequired(email, "Google email is required").toLowerCase();
+        String normalizedSub = normalizeRequired(sub, "Google subject is required");
+        if (!Boolean.TRUE.equals(emailVerified)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Google email is not verified");
+        }
+
+        Role customerRole = roleRepository.findByName(RoleName.ROLE_CUSTOMER)
+            .orElseThrow(() -> new IllegalStateException("Missing default role ROLE_CUSTOMER"));
+
+        Optional<UserAccount> existingByProvider = userAccountRepository.findByProviderAndProviderId(PROVIDER_GOOGLE, normalizedSub);
+        UserAccount user = existingByProvider
+            .or(() -> userAccountRepository.findByEmailIgnoreCase(normalizedEmail))
+            .orElseGet(UserAccount::new);
+
+        boolean newUser = user.getId() == null;
+        if (newUser) {
+            user.setEmail(normalizedEmail);
+            user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+            user.setDisplayName(defaultDisplayName(name, normalizedEmail));
+            user.setStatus(UserStatus.ACTIVE);
+            user.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+            user.setRoles(Set.of(customerRole));
+        } else if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is not active");
+        }
+
+        user.setProvider(PROVIDER_GOOGLE);
+        user.setProviderId(normalizedSub);
+        user.setAvatarUrl(normalizeNullable(picture));
+        user.setEmailVerified(true);
+        if (user.getDisplayName() == null || user.getDisplayName().isBlank()) {
+            user.setDisplayName(defaultDisplayName(name, normalizedEmail));
+        }
+        if (user.getRoles() == null || user.getRoles().isEmpty()) {
+            user.setRoles(Set.of(customerRole));
+        }
+
+        UserAccount saved = userAccountRepository.save(user);
+        return issueTokens(saved);
     }
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
@@ -265,6 +318,28 @@ public class AuthService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is not available", e);
         }
+    }
+
+    private String normalizeRequired(String value, String errorMessage) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, errorMessage);
+        }
+        return value.trim();
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String defaultDisplayName(String name, String email) {
+        String normalizedName = normalizeNullable(name);
+        if (normalizedName != null) {
+            return normalizedName.length() <= 120 ? normalizedName : normalizedName.substring(0, 120);
+        }
+        return email.length() <= 120 ? email : email.substring(0, 120);
     }
 
     private Role findRoleOrThrow(RoleName roleName) {

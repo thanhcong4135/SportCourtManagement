@@ -22,6 +22,7 @@ type AuthContextType = {
   userId?: string;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
+  completeOAuthLogin: (tokens: AuthTokens) => void;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   hasAnyRole: (roles: AuthRole[]) => boolean;
@@ -111,6 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateToken(response);
   }, [updateToken]);
 
+  const completeOAuthLogin = useCallback((tokens: AuthTokens) => {
+    updateToken(tokens);
+  }, [updateToken]);
+
   const refresh = useCallback(async () => {
     const currentToken = tokenRef.current;
     if (!currentToken?.refreshToken) {
@@ -173,10 +178,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userId: token?.userId,
     login,
     register,
+    completeOAuthLogin,
     logout,
     refresh,
     hasAnyRole,
-  }), [token, roles, login, register, logout, refresh, hasAnyRole]);
+  }), [token, roles, login, register, completeOAuthLogin, logout, refresh, hasAnyRole]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

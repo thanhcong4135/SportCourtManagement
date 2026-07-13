@@ -8,7 +8,9 @@ import com.sportcourt.auth.dto.RegisterRequest;
 import com.sportcourt.auth.dto.TokenRevokeResponse;
 import com.sportcourt.auth.service.AuthService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +39,13 @@ public class AuthController {
     @PostMapping("/login")
     public AuthTokenResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @GetMapping("/oauth2/google")
+    public ResponseEntity<Void> googleLogin() {
+        return ResponseEntity.status(HttpStatus.FOUND)
+            .header(HttpHeaders.LOCATION, "/oauth2/authorization/google")
+            .build();
     }
 
     @PostMapping("/refresh")

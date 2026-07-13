@@ -85,6 +85,29 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
+    void loginWithGoogle_shouldCreateVerifiedCustomerAndIssueTokens() {
+        AuthTokenResponse response = authService.loginWithGoogle(
+            "google@test.com",
+            "Google User",
+            "google-sub-1",
+            "https://example.com/avatar.png",
+            true
+        );
+
+        assertThat(response.email()).isEqualTo("google@test.com");
+        assertThat(response.roles()).containsExactly("CUSTOMER");
+        assertThat(response.accessToken()).isNotBlank();
+        assertThat(response.refreshToken()).isNotBlank();
+
+        var saved = userAccountRepository.findByEmailIgnoreCase("google@test.com").orElseThrow();
+        assertThat(saved.getProvider()).isEqualTo("GOOGLE");
+        assertThat(saved.getProviderId()).isEqualTo("google-sub-1");
+        assertThat(saved.getAvatarUrl()).isEqualTo("https://example.com/avatar.png");
+        assertThat(saved.isEmailVerified()).isTrue();
+        assertThat(saved.getPasswordHash()).isNotBlank();
+    }
+
+    @Test
     void refresh_shouldRotateRefreshToken() {
         AuthTokenResponse first = authService.register(new RegisterRequest("u2@test.com", "strongPass123", "U2"));
         AuthTokenResponse refreshed = authService.refresh(new RefreshTokenRequest(first.refreshToken()));

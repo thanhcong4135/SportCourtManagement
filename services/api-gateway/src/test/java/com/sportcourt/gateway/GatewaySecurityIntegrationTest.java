@@ -154,6 +154,15 @@ class GatewaySecurityIntegrationTest {
     }
 
     @Test
+    void googleOAuthEntry_shouldBePublicAndForwardToAuthService() {
+        webTestClient.get()
+            .uri("/api/auth/oauth2/google")
+            .exchange()
+            .expectStatus().is3xxRedirection()
+            .expectHeader().valueEquals("Location", "/oauth2/authorization/google");
+    }
+
+    @Test
     void loginThenCallCore_shouldAllowOwnerRole() {
         CORE_REQUEST_COUNT.set(0);
         BOOKINGS.clear();
@@ -336,6 +345,11 @@ class GatewaySecurityIntegrationTest {
                     .setResponseCode(200)
                     .addHeader("Content-Type", "application/json")
                     .setBody(responseBody);
+            }
+            if ("GET".equals(request.getMethod()) && "/api/auth/oauth2/google".equals(request.getPath())) {
+                return new MockResponse()
+                    .setResponseCode(302)
+                    .addHeader("Location", "/oauth2/authorization/google");
             }
             return new MockResponse().setResponseCode(404);
         }

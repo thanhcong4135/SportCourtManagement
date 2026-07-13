@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button, InputField } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { type LoginFormValues, loginSchema } from "../../features/auth/authSchemas";
+import { getApiBaseUrl } from "../../lib/api";
 import { toErrorPresentation } from "../../lib/errorPresentation";
 
 export function AuthLoginPage() {
@@ -36,6 +37,10 @@ export function AuthLoginPage() {
       setError(uiError.message);
       setTraceId(uiError.traceId ?? null);
     }
+  }
+
+  function loginWithGoogle() {
+    window.location.href = `${getApiBaseUrl()}/api/auth/oauth2/google`;
   }
 
   return (
@@ -85,6 +90,10 @@ export function AuthLoginPage() {
             {form.formState.isSubmitting ? "Đang xử lý..." : "ĐĂNG NHẬP"}
           </Button>
 
+          <Button type="button" variant="secondary" fullWidth onClick={loginWithGoogle}>
+            Đăng nhập với Google
+          </Button>
+
           <p className="auth-footnote">
             Bạn chưa có tài khoản? <Link to="/auth/register">Đăng ký</Link>
           </p>
@@ -93,4 +102,3 @@ export function AuthLoginPage() {
     </div>
   );
 }
-

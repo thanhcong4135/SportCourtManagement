@@ -28,7 +28,7 @@ spring:
         - id: auth-service
           uri: ${app.downstream.auth-service-url:http://localhost:8082}
           predicates:
-            - Path=/api/auth/**
+            - Path=/api/auth/**,/oauth2/**,/login/oauth2/**
         - id: core-service
           uri: ${app.downstream.core-service-url:http://localhost:8081}
           predicates:
