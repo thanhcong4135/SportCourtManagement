@@ -19,6 +19,7 @@ type DiscoverCard = {
   venueId: string;
   venueName: string;
   venueAddress: string;
+  coverImageUrl?: string | null;
   courtId: string;
   courtName: string;
   sportType: string;
@@ -153,6 +154,7 @@ export function DiscoverPage() {
       venueId: venue.id,
       venueName: venue.name,
       venueAddress: venue.address,
+      coverImageUrl: venue.coverImageUrl ?? venue.imageUrl ?? null,
       courtId: court.id,
       courtName: court.name,
       sportType: court.sportType,
@@ -324,6 +326,7 @@ export function DiscoverPage() {
               availabilityVariant={availabilityVariant}
               amenities={defaultVenueAmenities}
               bannerStyle={venueGalleryPlaceholders[index % venueGalleryPlaceholders.length]}
+              bannerImageUrl={card.coverImageUrl}
               onBook={() => navigate(`/venues/${card.venueId}?courtId=${card.courtId}&date=${selectedDate}`)}
               actionLabel="Đặt sân"
             />

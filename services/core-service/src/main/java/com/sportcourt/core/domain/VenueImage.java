@@ -11,15 +11,14 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.UuidGenerator;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "product")
+@Table(name = "venue_image")
 @Getter
 @Setter
-public class Product {
+public class VenueImage {
 
     @Id
     @UuidGenerator
@@ -29,33 +28,21 @@ public class Product {
     @JoinColumn(name = "venue_id", nullable = false)
     private Venue venue;
 
-    @Column(nullable = false)
-    private String name;
-
-    @Column(columnDefinition = "TEXT")
-    private String description;
-
-    @Column(name = "image_url", length = 1024)
+    @Column(name = "image_url", nullable = false, length = 1024)
     private String imageUrl;
 
-    @Column(length = 64)
-    private String category;
+    @Column(name = "alt_text")
+    private String altText;
 
-    @Column(length = 64)
-    private String unit;
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
 
-    @Column(name = "unit_price", nullable = false, precision = 12, scale = 2)
-    private BigDecimal unitPrice;
-
-    @Column(name = "is_active", nullable = false)
-    private boolean active;
+    @Column(name = "is_cover", nullable = false)
+    private boolean cover;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
-
-    public Product() {
+    public VenueImage() {
     }
 }

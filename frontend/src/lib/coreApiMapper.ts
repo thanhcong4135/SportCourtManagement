@@ -19,6 +19,19 @@ function asNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function asOptionalString(value: unknown): string | null {
+  const result = asString(value).trim();
+  return result ? result : null;
+}
+
+function asOptionalNumber(value: unknown): number | null {
+  if (value == null || value === "") {
+    return null;
+  }
+  const parsed = asNumber(value, Number.NaN);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function asBoolean(value: unknown, fallback = false): boolean {
   if (typeof value === "boolean") {
     return value;
@@ -53,10 +66,33 @@ function toEnum<T extends string>(value: unknown, allowed: readonly T[], fallbac
 
 export function mapVenue(value: unknown) {
   const dto = asObject(value);
+  const coverImageUrl = asOptionalString(dto.coverImageUrl) ?? asOptionalString(dto.imageUrl);
   return {
     id: asString(dto.id),
     name: asString(dto.name, "Unnamed venue"),
     address: asString(dto.address, ""),
+    description: asOptionalString(dto.description),
+    coverImageUrl,
+    imageUrl: coverImageUrl,
+    phone: asOptionalString(dto.phone),
+    openingTime: asOptionalString(dto.openingTime),
+    closingTime: asOptionalString(dto.closingTime),
+    latitude: asOptionalNumber(dto.latitude),
+    longitude: asOptionalNumber(dto.longitude),
+    images: asArray(dto.images).map(mapVenueImage),
+  };
+}
+
+export function mapVenueImage(value: unknown) {
+  const dto = asObject(value);
+  return {
+    id: asString(dto.id),
+    venueId: asString(dto.venueId),
+    imageUrl: asString(dto.imageUrl),
+    altText: asOptionalString(dto.altText),
+    sortOrder: asNumber(dto.sortOrder, 0),
+    cover: asBoolean(dto.cover, false),
+    createdAt: asString(dto.createdAt),
   };
 }
 

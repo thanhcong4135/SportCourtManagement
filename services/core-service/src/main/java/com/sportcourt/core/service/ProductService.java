@@ -35,6 +35,10 @@ public class ProductService {
         Product product = new Product();
         product.setVenue(venue);
         product.setName(req.name().trim());
+        product.setDescription(normalize(req.description()));
+        product.setImageUrl(normalize(req.imageUrl()));
+        product.setCategory(normalize(req.category()));
+        product.setUnit(normalize(req.unit()));
         product.setUnitPrice(req.unitPrice());
         product.setActive(req.active() == null || req.active());
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
@@ -63,10 +67,22 @@ public class ProductService {
             product.getId(),
             product.getVenue().getId(),
             product.getName(),
+            product.getDescription(),
+            product.getImageUrl(),
+            product.getCategory(),
+            product.getUnit(),
             product.getUnitPrice(),
             product.isActive(),
             product.getCreatedAt(),
             product.getUpdatedAt()
         );
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

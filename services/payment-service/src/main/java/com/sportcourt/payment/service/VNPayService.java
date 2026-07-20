@@ -191,6 +191,12 @@ public class VNPayService {
         if (properties.getHashSecret() == null || properties.getHashSecret().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VNPAY_HASH_SECRET is not configured");
         }
+        if (properties.getReturnUrl() == null || properties.getReturnUrl().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VNPAY_RETURN_URL is not configured");
+        }
+        if (properties.getIpnUrl() == null || properties.getIpnUrl().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VNPAY_IPN_URL is not configured");
+        }
     }
 
     private boolean isSignatureValid(Map<String, String> params) {

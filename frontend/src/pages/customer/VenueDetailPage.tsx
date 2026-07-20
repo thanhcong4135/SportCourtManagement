@@ -186,6 +186,14 @@ export function VenueDetailPage() {
   const selectedEnd = selectedRange ? timeMarkers[selectedRange.endIndex] : "";
   const selectedSlotCount = selectedRange ? selectedRange.endIndex - selectedRange.startIndex : 0;
   const selectedHours = selectedSlotCount / 2;
+  const galleryImages = useMemo(() => {
+    const images = venue?.images?.length
+      ? venue.images
+      : (venue?.coverImageUrl || venue?.imageUrl
+        ? [{ id: "cover", imageUrl: venue.coverImageUrl ?? venue.imageUrl ?? "", altText: venue.name, cover: true }]
+        : []);
+    return images.slice(0, 4);
+  }, [venue]);
 
   function getSlotStatus(courtId: string, slotIndex: number): SlotStatus {
     return slotStatusesByCourt[courtId]?.[slotIndex] ?? "free";
@@ -271,9 +279,18 @@ export function VenueDetailPage() {
       </header>
 
       <section className="venue-detail-gallery">
-        {venueGalleryPlaceholders.slice(0, 4).map((background, index) => (
-          <div key={background} className={`venue-gallery-item ${index === 0 ? "main" : ""}`} style={{ background }} />
-        ))}
+        {galleryImages.length > 0
+          ? galleryImages.map((image, index) => (
+            <div
+              key={image.id}
+              className={`venue-gallery-item ${index === 0 ? "main" : ""}`}
+              style={{ backgroundImage: `url("${image.imageUrl}")` }}
+              aria-label={image.altText ?? venue?.name ?? "Venue image"}
+            />
+          ))
+          : venueGalleryPlaceholders.slice(0, 4).map((background, index) => (
+            <div key={background} className={`venue-gallery-item ${index === 0 ? "main" : ""}`} style={{ background }} />
+          ))}
       </section>
 
       <section className="venue-detail-info">

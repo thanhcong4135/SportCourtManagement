@@ -33,6 +33,10 @@ type ApiAuthBridge = {
   clearTokens?: () => void;
 };
 
+type ApiFetchInit = RequestInit & {
+  skipAuth?: boolean;
+};
+
 const apiAuthBridge: ApiAuthBridge = {};
 
 export class ApiRequestError extends Error {
@@ -101,52 +105,23 @@ export function createIdempotencyKey(prefix = "sc"): string {
   return `${prefix}-${timePart}-${randomPart}`;
 }
 
-function isPublicEndpoint(path: string, method: string): boolean {
-  const normalizedMethod = method.toUpperCase();
-
-  if (
-    normalizedMethod === "GET"
-    && (
-      path.startsWith("/api/core/venues")
-      || path.startsWith("/api/core/courts")
-      || path.startsWith("/api/core/availability")
-    )
-  ) {
-    return true;
-  }
-
-  if (
-    normalizedMethod === "POST"
-    && (
-      path === "/api/auth/register"
-      || path === "/api/auth/login"
-      || path === "/api/auth/refresh"
-      || path === "/api/payments/callback"
-    )
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-export async function apiFetch<T>(path: string, init: RequestInit = {}, accessToken?: string): Promise<T> {
+export async function apiFetch<T>(path: string, init: ApiFetchInit = {}, accessToken?: string): Promise<T> {
   return apiFetchInternal(path, init, accessToken, true);
 }
 
 async function apiFetchInternal<T>(
   path: string,
-  init: RequestInit,
+  init: ApiFetchInit,
   accessToken: string | undefined,
   allowRefreshRetry: boolean,
 ): Promise<T> {
-  const headers = new Headers(init.headers || {});
-  if (!headers.has("Content-Type") && init.body) {
+  const { skipAuth = false, ...requestInit } = init;
+  const headers = new Headers(requestInit.headers || {});
+  if (!headers.has("Content-Type") && requestInit.body) {
     headers.set("Content-Type", "application/json");
   }
 
-  const method = init.method ?? "GET";
-  const shouldAttachAutoToken = !isPublicEndpoint(path, method);
+  const shouldAttachAutoToken = !skipAuth;
   const autoToken = shouldAttachAutoToken ? apiAuthBridge.getTokens?.()?.accessToken : undefined;
   const effectiveToken = accessToken || autoToken;
   const usedAutoToken = Boolean(autoToken && !accessToken);
@@ -154,7 +129,7 @@ async function apiFetchInternal<T>(
     headers.set("Authorization", `Bearer ${effectiveToken}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...requestInit, headers });
   const text = await response.text();
   const payload = safeParsePayload(text);
 

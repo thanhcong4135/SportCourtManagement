@@ -167,6 +167,7 @@ export function LandingPage() {
               availabilityVariant="success"
               amenities={["Bãi xe", "Nhà tắm", "Nước uống"]}
               bannerStyle={venueGalleryPlaceholders[index % venueGalleryPlaceholders.length]}
+              bannerImageUrl={row.venue.coverImageUrl ?? row.venue.imageUrl ?? null}
               onBook={() => navigate(`/venues/${row.venue.id}?courtId=${row.court.id}`)}
               actionLabel="Đặt sân"
             />

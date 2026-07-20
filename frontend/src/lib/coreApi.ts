@@ -15,6 +15,32 @@ export type Venue = {
   id: string;
   name: string;
   address: string;
+  description?: string | null;
+  coverImageUrl?: string | null;
+  imageUrl?: string | null;
+  phone?: string | null;
+  openingTime?: string | null;
+  closingTime?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  images?: VenueImage[];
+};
+
+export type VenueImage = {
+  id: string;
+  venueId: string;
+  imageUrl: string;
+  altText?: string | null;
+  sortOrder: number;
+  cover: boolean;
+  createdAt?: string;
+};
+
+export type VenueImagePayload = {
+  imageUrl: string;
+  altText?: string;
+  sortOrder?: number;
+  cover?: boolean;
 };
 
 export type Court = {
@@ -54,6 +80,10 @@ export type Product = {
   id: string;
   venueId: string;
   name: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  category?: string | null;
+  unit?: string | null;
   unitPrice: number;
   active: boolean;
 };
@@ -162,17 +192,56 @@ export type PaymentByRefStatus = {
 };
 
 export async function listVenues() {
-  const response = await apiFetch<unknown[]>("/api/core/venues");
+  const response = await apiFetch<unknown[]>("/api/core/venues", { skipAuth: true });
   return response.map((item) => mapVenue(item) as Venue);
 }
 
 export async function listCourts(venueId: string) {
-  const response = await apiFetch<unknown[]>(`/api/core/courts?venueId=${venueId}`);
+  const response = await apiFetch<unknown[]>(`/api/core/courts?venueId=${venueId}`, { skipAuth: true });
   return response.map((item) => mapCourt(item) as Court);
 }
 
 export async function listProducts(venueId: string, activeOnly = true) {
   return apiFetch<Product[]>(`/api/core/products?venueId=${venueId}&activeOnly=${activeOnly}`);
+}
+
+export async function listVenueImages(venueId: string) {
+  return apiFetch<VenueImage[]>(`/api/core/venues/${venueId}/images`);
+}
+
+export async function createVenueImage(venueId: string, payload: VenueImagePayload, accessToken?: string) {
+  return apiFetch<VenueImage>(`/api/core/venues/${venueId}/images`, {
+    method: "POST",
+    headers: {
+      "Idempotency-Key": createIdempotencyKey("venue-image-create"),
+    },
+    body: JSON.stringify(payload),
+  }, accessToken);
+}
+
+export async function updateVenueImage(venueId: string, imageId: string, payload: VenueImagePayload, accessToken?: string) {
+  return apiFetch<VenueImage>(`/api/core/venues/${venueId}/images/${imageId}`, {
+    method: "PUT",
+    headers: {
+      "Idempotency-Key": createIdempotencyKey("venue-image-update"),
+    },
+    body: JSON.stringify(payload),
+  }, accessToken);
+}
+
+export async function deleteVenueImage(venueId: string, imageId: string, accessToken?: string) {
+  return apiFetch<void>(`/api/core/venues/${venueId}/images/${imageId}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
+export async function setVenueCoverImage(venueId: string, imageId: string, accessToken?: string) {
+  return apiFetch<VenueImage>(`/api/core/venues/${venueId}/images/${imageId}/set-cover`, {
+    method: "POST",
+    headers: {
+      "Idempotency-Key": createIdempotencyKey("venue-image-cover"),
+    },
+  }, accessToken);
 }
 
 export async function listBookings(
@@ -208,7 +277,7 @@ export async function getBookingById(bookingId: string) {
 export async function checkAvailability(courtId: string, startIso: string, endIso: string) {
   const start = encodeURIComponent(startIso);
   const end = encodeURIComponent(endIso);
-  return apiFetch<{ available: boolean }>(`/api/core/availability?courtId=${courtId}&start=${start}&end=${end}`);
+  return apiFetch<{ available: boolean }>(`/api/core/availability?courtId=${courtId}&start=${start}&end=${end}`, { skipAuth: true });
 }
 
 export async function quoteBooking(courtId: string, startIso: string, endIso: string) {

@@ -90,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshWithToken = useCallback(async (refreshToken: string) => {
     const response = await apiFetch<AuthTokens>("/api/auth/refresh", {
       method: "POST",
+      skipAuth: true,
       body: JSON.stringify({ refreshToken }),
     });
     updateToken(response);
@@ -99,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (payload: LoginPayload) => {
     const response = await apiFetch<AuthTokens>("/api/auth/login", {
       method: "POST",
+      skipAuth: true,
       body: JSON.stringify(payload),
     });
     updateToken(response);
@@ -107,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = useCallback(async (payload: RegisterPayload) => {
     const response = await apiFetch<AuthTokens>("/api/auth/register", {
       method: "POST",
+      skipAuth: true,
       body: JSON.stringify(payload),
     });
     updateToken(response);
