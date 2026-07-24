@@ -2784,3 +2784,88 @@ File nay duoc dat cung cap voi file plan `SportCourt_Plan_AIChatbot_Microservice
 - Hành động: mở route bảo mật phù hợp ở payment-service và api-gateway cho VNPAY IPN/return/create-payment.
 - Hành động: thêm option VNPAY Sandbox ở checkout frontend và trang `/payment-result` để đọc trạng thái thật theo paymentRef.
 - Ghi chú: không hard-code secret; `VNPAY_HASH_SECRET` phải khai báo qua env khi test sandbox.
+
+## 2026-07-23 - Notification plan Phase 1: customer IN_APP inbox
+- Mục đích:
+  - Bổ sung inbox thông báo riêng theo customer, trạng thái đã đọc/chưa đọc và deep link nội bộ.
+  - Giữ nguyên API quản trị notification và chặn customer truy cập endpoint quản trị.
+- Backend:
+  - Thêm migration `V2__customer_in_app_notifications.sql` với `title`, `deep_link`, `read_at` và index inbox.
+  - Bổ sung API:
+    - `GET /api/notifications/me`
+    - `GET /api/notifications/me/unread-count`
+    - `PATCH /api/notifications/me/{notificationId}/read`
+    - `PATCH /api/notifications/me/read-all`
+  - Chỉ trả notification `IN_APP` đã gửi thành công của đúng `sub` trong JWT.
+  - Bổ sung resource-server security cho notification-service và rule `/me/**` riêng ở api-gateway.
+  - Event booking/payment schema `1.0` tiếp tục tương thích; nội dung IN_APP có title tiếng Việt và deep link booking.
+- Frontend:
+  - Thêm notification bell/dropdown dùng chung ở Discover và Account.
+  - Poll unread count 30 giây khi document visible; refresh khi focus.
+  - Thêm trang `/account/notifications`, filter tất cả/chưa đọc, mark one/mark all và phân trang.
+- Docker:
+  - Truyền JWT issuer/JWK URL từ auth-service sang notification-service.
+- Gate 1:
+  - `notification-service`: `mvn -q "-Dmaven.repo.local=.m2repo" test` (PASS, 14 tests).
+  - `api-gateway`: `mvn -q "-Dmaven.repo.local=.m2repo" test` (PASS).
+  - `frontend`: `npm run lint` (PASS).
+  - `frontend`: `npm run typecheck` (PASS).
+  - `frontend`: `npm run build` (PASS).
+
+## 2026-07-23 - Notification plan Phase 2: transactional email
+- Mục đích:
+  - Chụp email customer tại thời điểm tạo booking và truyền xuyên suốt booking/payment event.
+  - Gửi email giao dịch thật qua SMTP nhưng vẫn giữ IN_APP và tương thích event schema `1.0`.
+- Core/payment:
+  - Thêm migration `V13__booking_customer_email.sql` và `V7__payment_customer_email.sql`.
+  - Booking của customer hoặc actor tự đặt dùng email từ JWT; owner/admin đặt cho customer khác có thể truyền email hợp lệ.
+  - Chuẩn hóa email bằng trim + lowercase; booking/payment event schema `1.1` có `customerEmail` optional.
+  - Consumer vẫn nhận schema `1.0`; transaction cũ không có email vẫn hợp lệ.
+- Notification:
+  - Factory tạo tối đa hai command độc lập cho cùng event: `IN_APP` theo customerId và `EMAIL` theo email allowlist.
+  - Thêm `NotificationChannelSender`, `InAppNotificationSender`, `SmtpEmailNotificationSender` và `NotificationSenderRouter`.
+  - Missing sender hoặc SMTP error đi qua retry/backoff hiện có, không bị đánh dấu SENT giả.
+  - Thêm renderer email UTF-8, escape dữ liệu động, CTA nội bộ và log recipient đã mask.
+  - Thêm Spring Mail; mock sender chỉ còn active trong test profile.
+- Docker/docs:
+  - Thêm Mailpit (`1025` SMTP, `8025` UI), SMTP env và frontend base URL.
+  - Thêm `docs/notification-v2.md` hướng dẫn API, SMTP và lệnh Compose dùng root `.env`.
+- Deviation:
+  - Không thêm GreenMail/Wiser vì sender đã được test bằng mock `JavaMailSender`; E2E thật dùng Mailpit local.
+  - Sửa isolation/assertion ở hai test core cũ để full suite chạy ổn với schema/domain hiện tại; không đổi behavior production.
+- Gate 2:
+  - `core-service`: `mvn -q "-Dmaven.repo.local=.m2repo" clean test` (PASS).
+  - `payment-service`: `mvn -q "-Dmaven.repo.local=.m2repo" clean test` (PASS, gồm Kafka Testcontainers E2E).
+  - `notification-service`: `mvn -q "-Dmaven.repo.local=.m2repo" clean test` (PASS).
+  - `api-gateway`: `mvn -q "-Dmaven.repo.local=.m2repo" clean test` (PASS).
+  - `frontend`: `npm run lint`, `npm run typecheck`, `npm run build` (PASS).
+  - Docker Compose config với root `.env` (PASS); health `8080`-`8084` và Mailpit `8025` (PASS).
+  - Kafka `BOOKING_CONFIRMED` schema `1.1` tạo `IN_APP=SENT`, `EMAIL=SENT`; Mailpit nhận email UTF-8 (PASS).
+
+## 2026-07-23 - Fix Google OAuth Docker configuration
+- Hiện tượng: Google trả `401 invalid_client` sau khi auth-service được tạo lại.
+- Nguyên nhân: root `.env` không có `GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET`, nên Compose đã dùng `dev-google-*` placeholder.
+- Xác nhận:
+  - Notification task không sửa auth-service, OAuth gateway route hoặc frontend Google login handler.
+  - Redirect thực tế dùng placeholder client ID và callback `http://localhost:8080/login/oauth2/code/google`.
+- Hành động:
+  - Bỏ fallback placeholder; Compose fail-fast nếu thiếu Google OAuth credentials.
+  - Thêm `.env.example` mô tả Google OAuth, VNPAY và local email variables nhưng không chứa secret.
+- Verify:
+  - `docker compose config --quiet` với temporary validation credentials (PASS).
+  - Chưa recreate auth-service vì credential Google thật không có trong workspace/host environment.
+
+## 2026-07-23 - Deduplicate booking success email
+- Hiện tượng: một flow thanh toán thành công gửi ba email từ `DEPOSIT_SUCCEEDED`, `BOOKING_DEPOSITED` và `BOOKING_CONFIRMED`.
+- Hành động:
+  - Chỉ `BOOKING_CONFIRMED` được tạo notification channel `EMAIL`.
+  - Payment/deposit/lifecycle event vẫn tạo `IN_APP`, không mất lịch sử trạng thái.
+  - Cập nhật factory tests, payment consumer test và tài liệu allowlist.
+- Verify:
+  - `notification-service`: `mvn -q "-Dmaven.repo.local=.m2repo" clean test` (PASS, 27 tests).
+  - Rebuild/recreate riêng notification-service (PASS, health 200).
+  - Runtime Kafka E2E với ba event cùng booking:
+    - `DEPOSIT_SUCCEEDED`: 1 IN_APP, 0 EMAIL.
+    - `BOOKING_DEPOSITED`: 1 IN_APP, 0 EMAIL.
+    - `BOOKING_CONFIRMED`: 1 IN_APP, 1 EMAIL SENT.
+  - SMTP success log chỉ xuất hiện một lần cho flow mô phỏng.
