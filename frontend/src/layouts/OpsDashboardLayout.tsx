@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   OPS_DASHBOARD_ROLES,
@@ -12,100 +11,84 @@ import { useAuth, type AuthRole } from "../context/AuthContext";
 type OpsMenuItem = {
   to: string;
   label: string;
-  hint: string;
+  hint?: string;
   roles: AuthRole[];
+  icon: string;
+  exact?: boolean;
+  tab?: string;
 };
 
-type DashboardChildItem = {
-  to: string;
-  tab: string;
-  label: string;
-};
-
-const menuItems: OpsMenuItem[] = [
-  { to: "/ops", label: "Dashboard", hint: "Tổng quan", roles: OPS_DASHBOARD_ROLES },
-  { to: "/ops/notifications", label: "Notifications", hint: "Gửi & retry", roles: OPS_NOTIFICATIONS_ROLES },
-  { to: "/ops/pricing-rules", label: "Pricing Rules", hint: "Bảng giá theo sân", roles: OPS_PRICING_ROLES },
-  { to: "/ops/admin/users", label: "User Management", hint: "Admin only", roles: OPS_USER_MANAGEMENT_ROLES },
-  { to: "/ops/dlq", label: "DLQ Replay", hint: "Reliability tools", roles: OPS_DLQ_ROLES },
+const operationsItems: OpsMenuItem[] = [
+  { to: "/ops", label: "Tổng quan", roles: OPS_DASHBOARD_ROLES, icon: "●", exact: true, tab: "overview" },
+  { to: "/ops?tab=venues", label: "Cụm sân", roles: OPS_DASHBOARD_ROLES, icon: "⌂", tab: "venues" },
+  { to: "/ops?tab=courts", label: "Sân", roles: OPS_DASHBOARD_ROLES, icon: "▦", tab: "courts" },
+  { to: "/ops?tab=addons", label: "Dịch vụ / Add-on", roles: OPS_DASHBOARD_ROLES, icon: "◇", tab: "addons" },
+  { to: "/ops?tab=pricing", label: "Pricing setup", roles: OPS_DASHBOARD_ROLES, icon: "♙", tab: "pricing" },
+  { to: "/ops/pricing-rules", label: "Pricing Rules", roles: OPS_PRICING_ROLES, icon: "≡" },
 ];
 
-const dashboardChildren: DashboardChildItem[] = [
-  { to: "/ops", tab: "overview", label: "Tổng quan" },
-  { to: "/ops?tab=venues", tab: "venues", label: "Cụm sân" },
-  { to: "/ops?tab=courts", tab: "courts", label: "Sân" },
-  { to: "/ops?tab=addons", tab: "addons", label: "Dịch vụ / Add-on" },
-  { to: "/ops?tab=pricing", tab: "pricing", label: "Pricing setup" },
+const systemItems: OpsMenuItem[] = [
+  { to: "/ops/notifications", label: "Notifications", roles: OPS_NOTIFICATIONS_ROLES, icon: "○" },
+  { to: "/ops/admin/users", label: "User Management", roles: OPS_USER_MANAGEMENT_ROLES, icon: "○" },
+  { to: "/ops/dlq", label: "DLQ Replay", roles: OPS_DLQ_ROLES, icon: "○" },
 ];
+
+function isDashboardTabActive(item: OpsMenuItem, pathname: string, search: string): boolean {
+  if (pathname !== "/ops" || !item.tab) {
+    return false;
+  }
+  const requestedTab = new URLSearchParams(search).get("tab") ?? "overview";
+  return requestedTab === item.tab;
+}
 
 export function OpsDashboardLayout() {
   const { token, roles, hasAnyRole, logout } = useAuth();
   const location = useLocation();
-  const [dashboardExpanded, setDashboardExpanded] = useState(location.pathname === "/ops");
-  const visibleItems = menuItems.filter((item) => hasAnyRole(item.roles));
-  const requestedDashboardTab = new URLSearchParams(location.search).get("tab");
-  const activeDashboardTab = dashboardChildren.some((child) => child.tab === requestedDashboardTab)
-    ? requestedDashboardTab
-    : "overview";
-  const isDashboardRoute = location.pathname === "/ops";
+  const visibleOperationsItems = operationsItems.filter((item) => hasAnyRole(item.roles));
+  const visibleSystemItems = systemItems.filter((item) => hasAnyRole(item.roles));
 
-  useEffect(() => {
-    setDashboardExpanded(isDashboardRoute);
-  }, [isDashboardRoute]);
+  function renderItem(item: OpsMenuItem) {
+    const dashboardActive = isDashboardTabActive(item, location.pathname, location.search);
+    if (item.tab) {
+      return (
+        <Link key={item.to} to={item.to} className={dashboardActive ? "active" : ""}>
+          <span className="ops-sidebar-icon" aria-hidden="true">{item.icon}</span>
+          <span>{item.label}</span>
+        </Link>
+      );
+    }
+
+    return (
+      <NavLink key={item.to} to={item.to} end={item.exact} className={({ isActive }) => (isActive ? "active" : "")}>
+        <span className="ops-sidebar-icon" aria-hidden="true">{item.icon}</span>
+        <span>{item.label}</span>
+        {item.hint ? <small>{item.hint}</small> : null}
+      </NavLink>
+    );
+  }
 
   return (
     <div className="ops-dashboard-layout">
       <aside className="ops-sidebar">
         <div className="ops-sidebar-brand">
           <strong>SportCourt</strong>
-          <span>Ops Console</span>
+          <span>Admin Console</span>
         </div>
 
         <nav className="ops-sidebar-menu" aria-label="Ops dashboard menu">
-          {visibleItems.map((item) => {
-            const isDashboardItem = item.to === "/ops";
-            return (
-              <div key={item.to} className={isDashboardItem ? "ops-sidebar-menu-group" : undefined}>
-                {isDashboardItem ? (
-                  <div
-                    className={[
-                      "ops-sidebar-parent-row",
-                      isDashboardRoute && activeDashboardTab === "overview" ? "active" : "",
-                      isDashboardRoute && activeDashboardTab !== "overview" ? "is-parent" : "",
-                    ].filter(Boolean).join(" ")}
-                  >
-                    <NavLink to={item.to} end className="">
-                      <strong>{item.label}</strong>
-                      <small>{item.hint}</small>
-                    </NavLink>
-                    <button
-                      type="button"
-                      className="ops-sidebar-toggle"
-                      aria-label={dashboardExpanded ? "Thu gọn Dashboard" : "Mở rộng Dashboard"}
-                      aria-expanded={dashboardExpanded}
-                      onClick={() => setDashboardExpanded((value) => !value)}
-                    >
-                      {dashboardExpanded ? "▲" : "▼"}
-                    </button>
-                  </div>
-                ) : (
-                  <NavLink to={item.to} end={item.to === "/ops"} className={({ isActive }) => (isActive ? "active" : "")}>
-                    <strong>{item.label}</strong>
-                    <small>{item.hint}</small>
-                  </NavLink>
-                )}
-                {isDashboardItem && dashboardExpanded ? (
-                  <div className="ops-sidebar-submenu" aria-label="Dashboard sections">
-                    {dashboardChildren.filter((child) => child.tab !== "overview").map((child) => (
-                      <Link key={child.tab} to={child.to} className={activeDashboardTab === child.tab ? "active" : ""}>
-                        {child.label}
-                      </Link>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+          {visibleOperationsItems.length ? (
+            <section className="ops-sidebar-section">
+              <p className="ops-sidebar-section-title">Quản lý vận hành</p>
+              {visibleOperationsItems.map(renderItem)}
+            </section>
+          ) : null}
+
+          {visibleSystemItems.length ? (
+            <section className="ops-sidebar-section">
+              <p className="ops-sidebar-section-title">Hệ thống</p>
+              {visibleSystemItems.map(renderItem)}
+            </section>
+          ) : null}
         </nav>
 
         <div className="ops-sidebar-footer">

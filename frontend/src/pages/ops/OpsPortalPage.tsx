@@ -667,6 +667,8 @@ export function OpsPortalPage() {
                 courts={courts}
                 bookings={todayBookings}
                 date={operatingDate}
+                openingTime={selectedVenue?.openingTime}
+                closingTime={selectedVenue?.closingTime}
                 loading={opsScheduleLoading}
                 onSelectBooking={setSelectedBooking}
               />
