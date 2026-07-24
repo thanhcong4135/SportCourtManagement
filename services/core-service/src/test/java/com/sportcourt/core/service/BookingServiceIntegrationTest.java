@@ -6,9 +6,11 @@ import com.sportcourt.core.api.PageResponse;
 import com.sportcourt.core.domain.Court;
 import com.sportcourt.core.domain.Venue;
 import com.sportcourt.core.domain.enums.BookingStatus;
+import com.sportcourt.core.domain.enums.AvailabilityBlockStatus;
 import com.sportcourt.core.domain.enums.PaymentStatus;
 import com.sportcourt.core.domain.enums.SportType;
 import com.sportcourt.core.dto.BatchBookingActionResponse;
+import com.sportcourt.core.dto.AvailabilityBlockResponse;
 import com.sportcourt.core.dto.BatchBookingDraftRequest;
 import com.sportcourt.core.dto.BatchBookingDraftResponse;
 import com.sportcourt.core.dto.BatchConfirmRequest;
@@ -339,6 +341,41 @@ class BookingServiceIntegrationTest {
         assertThat(event.getPayload()).isNotBlank();
         JsonNode payload = objectMapper.readTree(event.getPayload());
         assertThat(payload.path("eventId").asText()).isNotBlank();
+    }
+
+    @Test
+    void listAvailabilityBlocks_shouldReturnActiveBookingsAcrossCustomers() {
+        Court court = createCourt("Shared-Court");
+        BookingResponse held = bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            UUID.randomUUID(),
+            time(2026, 3, 10, 8, 0),
+            time(2026, 3, 10, 9, 0),
+            money("200000")
+        ));
+        BookingResponse booked = bookingService.createDraft(new BookingDraftRequest(
+            court.getId(),
+            UUID.randomUUID(),
+            time(2026, 3, 10, 10, 0),
+            time(2026, 3, 10, 11, 0),
+            money("200000")
+        ));
+        bookingService.payDeposit(booked.id(), new DepositPaymentRequest(money("100000")));
+        bookingService.confirm(booked.id());
+
+        List<AvailabilityBlockResponse> blocks = bookingService.listAvailabilityBlocks(
+            List.of(court.getId()),
+            time(2026, 3, 10, 0, 0),
+            time(2026, 3, 11, 0, 0)
+        );
+
+        assertThat(blocks).hasSize(2);
+        assertThat(blocks)
+            .extracting(AvailabilityBlockResponse::status)
+            .containsExactly(AvailabilityBlockStatus.HELD, AvailabilityBlockStatus.BOOKED);
+        assertThat(blocks)
+            .extracting(AvailabilityBlockResponse::startTime)
+            .containsExactly(held.startTime(), booked.startTime());
     }
 
     @Test

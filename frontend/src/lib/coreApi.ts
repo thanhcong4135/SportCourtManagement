@@ -66,6 +66,13 @@ export type Booking = {
   depositPaid: number;
 };
 
+export type AvailabilityBlock = {
+  courtId: string;
+  startTime: string;
+  endTime: string;
+  status: "HELD" | "BOOKED";
+};
+
 export type BookingPage = {
   items: Booking[];
   totalElements?: number;
@@ -278,6 +285,15 @@ export async function checkAvailability(courtId: string, startIso: string, endIs
   const start = encodeURIComponent(startIso);
   const end = encodeURIComponent(endIso);
   return apiFetch<{ available: boolean }>(`/api/core/availability?courtId=${courtId}&start=${start}&end=${end}`, { skipAuth: true });
+}
+
+export async function listAvailabilitySchedule(courtIds: string[], startIso: string, endIso: string) {
+  if (!courtIds.length) {
+    return [];
+  }
+  const search = new URLSearchParams({ start: startIso, end: endIso });
+  courtIds.forEach((courtId) => search.append("courtIds", courtId));
+  return apiFetch<AvailabilityBlock[]>(`/api/core/availability/schedule?${search.toString()}`, { skipAuth: true });
 }
 
 export async function quoteBooking(courtId: string, startIso: string, endIso: string) {

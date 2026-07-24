@@ -4,7 +4,15 @@ import { BookingSummary } from "../../components/booking/BookingSummary";
 import { TimeSlotGrid, type SlotStatus } from "../../components/booking/TimeSlotGrid";
 import { Button, Modal, useToast } from "../../components/ui";
 import { toErrorPresentation } from "../../lib/errorPresentation";
-import { buildDateRangeIso, listBookings, listCourts, listVenues, type Booking, type Court, type Venue } from "../../lib/coreApi";
+import {
+  buildDateRangeIso,
+  listAvailabilitySchedule,
+  listCourts,
+  listVenues,
+  type AvailabilityBlock,
+  type Court,
+  type Venue,
+} from "../../lib/coreApi";
 
 const START_MINUTE = 5 * 60;
 const END_MINUTE = 24 * 60;
@@ -37,14 +45,8 @@ function toMinutes(time: string) {
   return hh * 60 + mm;
 }
 
-function mapBookingToSlotStatus(booking: Booking): SlotStatus {
-  if (booking.status === "DRAFT") {
-    return "held";
-  }
-  if (booking.status === "CONFIRMED" || booking.status === "IN_PROGRESS" || booking.status === "COMPLETED") {
-    return "booked";
-  }
-  return "free";
+function mapAvailabilityToSlotStatus(block: AvailabilityBlock): SlotStatus {
+  return block.status === "HELD" ? "held" : "booked";
 }
 
 function statusRank(status: SlotStatus): number {
@@ -67,7 +69,7 @@ export function BookingGridPage() {
 
   const [venues, setVenues] = useState<Venue[]>([]);
   const [courts, setCourts] = useState<Court[]>([]);
-  const [bookingsByCourt, setBookingsByCourt] = useState<Record<string, Booking[]>>({});
+  const [availabilityByCourt, setAvailabilityByCourt] = useState<Record<string, AvailabilityBlock[]>>({});
 
   const [selectedVenueId, setSelectedVenueId] = useState(searchParams.get("venueId") ?? "");
   const [selectedCourtId, setSelectedCourtId] = useState(searchParams.get("courtId") ?? "");
@@ -125,7 +127,7 @@ export function BookingGridPage() {
   useEffect(() => {
     async function loadSchedule() {
       if (!courts.length) {
-        setBookingsByCourt({});
+        setAvailabilityByCourt({});
         return;
       }
       try {
@@ -133,11 +135,12 @@ export function BookingGridPage() {
         setError(null);
         setTraceId(null);
         const range = buildDateRangeIso(selectedDate);
-        const rows = await Promise.all(courts.map(async (court) => {
-          const page = await listBookings({ courtId: court.id, from: range.from, to: range.to, size: 120 });
-          return [court.id, page.items ?? []] as const;
-        }));
-        setBookingsByCourt(Object.fromEntries(rows));
+        const blocks = await listAvailabilitySchedule(courts.map((court) => court.id), range.from, range.to);
+        const grouped = Object.fromEntries(courts.map((court) => [court.id, [] as AvailabilityBlock[]]));
+        blocks.forEach((block) => {
+          grouped[block.courtId]?.push(block);
+        });
+        setAvailabilityByCourt(grouped);
       } catch (err) {
         const uiError = toErrorPresentation(err, "Không tải được lịch đặt");
         setError(uiError.message);
@@ -173,14 +176,11 @@ export function BookingGridPage() {
     const map: Record<string, SlotStatus[]> = {};
     courts.forEach((court) => {
       const slots: SlotStatus[] = Array.from({ length: slotMarkers.length }, () => "free");
-      const rows = bookingsByCourt[court.id] ?? [];
-      rows.forEach((booking) => {
-        if (booking.status === "CANCELED" || booking.status === "FAILED_TIMEOUT") {
-          return;
-        }
-        const status = mapBookingToSlotStatus(booking);
-        const start = new Date(booking.startTime);
-        const end = new Date(booking.endTime);
+      const blocks = availabilityByCourt[court.id] ?? [];
+      blocks.forEach((block) => {
+        const status = mapAvailabilityToSlotStatus(block);
+        const start = new Date(block.startTime);
+        const end = new Date(block.endTime);
         const bookingStart = start.getHours() * 60 + start.getMinutes();
         const bookingEnd = end.getHours() * 60 + end.getMinutes();
         slotMarkers.forEach((marker, index) => {
@@ -201,7 +201,7 @@ export function BookingGridPage() {
       map[court.id] = slots;
     });
     return map;
-  }, [bookingsByCourt, courts, selectedDate]);
+  }, [availabilityByCourt, courts, selectedDate]);
 
   const selectedStart = selectedRange ? slotMarkers[selectedRange.startIndex] : "";
   const selectedEnd = selectedRange ? timeMarkers[selectedRange.endIndex] : "";

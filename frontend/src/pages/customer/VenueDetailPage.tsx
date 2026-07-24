@@ -7,7 +7,15 @@ import { Button, StatusBadge, useToast } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { defaultVenueAmenities, venueGalleryPlaceholders } from "../../data/mockMedia";
 import { toErrorPresentation } from "../../lib/errorPresentation";
-import { buildDateRangeIso, listBookings, listCourts, listVenues, type Booking, type Court, type Venue } from "../../lib/coreApi";
+import {
+  buildDateRangeIso,
+  listAvailabilitySchedule,
+  listCourts,
+  listVenues,
+  type AvailabilityBlock,
+  type Court,
+  type Venue,
+} from "../../lib/coreApi";
 
 const START_MINUTE = 5 * 60;
 const END_MINUTE = 24 * 60;
@@ -40,14 +48,8 @@ function toMinutes(time: string): number {
   return hh * 60 + mm;
 }
 
-function mapBookingToSlotStatus(booking: Booking): SlotStatus {
-  if (booking.status === "DRAFT") {
-    return "held";
-  }
-  if (booking.status === "CONFIRMED" || booking.status === "IN_PROGRESS" || booking.status === "COMPLETED") {
-    return "booked";
-  }
-  return "free";
+function mapAvailabilityToSlotStatus(block: AvailabilityBlock): SlotStatus {
+  return block.status === "HELD" ? "held" : "booked";
 }
 
 function statusRank(status: SlotStatus): number {
@@ -72,7 +74,7 @@ export function VenueDetailPage() {
 
   const [venue, setVenue] = useState<Venue | null>(null);
   const [courts, setCourts] = useState<Court[]>([]);
-  const [bookingsByCourt, setBookingsByCourt] = useState<Record<string, Booking[]>>({});
+  const [availabilityByCourt, setAvailabilityByCourt] = useState<Record<string, AvailabilityBlock[]>>({});
   const [selectedCourtId, setSelectedCourtId] = useState(searchParams.get("courtId") ?? "");
   const [selectedDate, setSelectedDate] = useState(searchParams.get("date") ?? formatIsoDate(new Date()));
   const [selectionAnchor, setSelectionAnchor] = useState<SlotAnchor | null>(null);
@@ -111,7 +113,7 @@ export function VenueDetailPage() {
   useEffect(() => {
     async function loadSchedule() {
       if (!courts.length) {
-        setBookingsByCourt({});
+        setAvailabilityByCourt({});
         return;
       }
       try {
@@ -119,16 +121,12 @@ export function VenueDetailPage() {
         setError(null);
         setTraceId(null);
         const range = buildDateRangeIso(selectedDate);
-        const rows = await Promise.all(courts.map(async (court) => {
-          const page = await listBookings({
-            courtId: court.id,
-            from: range.from,
-            to: range.to,
-            size: 120,
-          });
-          return [court.id, page.items ?? []] as const;
-        }));
-        setBookingsByCourt(Object.fromEntries(rows));
+        const blocks = await listAvailabilitySchedule(courts.map((court) => court.id), range.from, range.to);
+        const grouped = Object.fromEntries(courts.map((court) => [court.id, [] as AvailabilityBlock[]]));
+        blocks.forEach((block) => {
+          grouped[block.courtId]?.push(block);
+        });
+        setAvailabilityByCourt(grouped);
       } catch (err) {
         const uiError = toErrorPresentation(err, "Không tải được lịch trống");
         setError(uiError.message);
@@ -147,14 +145,11 @@ export function VenueDetailPage() {
     const result: Record<string, SlotStatus[]> = {};
     courts.forEach((court) => {
       const slots: SlotStatus[] = Array.from({ length: slotMarkers.length }, () => "free");
-      const bookings = bookingsByCourt[court.id] ?? [];
-      bookings.forEach((booking) => {
-        if (booking.status === "CANCELED" || booking.status === "FAILED_TIMEOUT") {
-          return;
-        }
-        const slotStatus = mapBookingToSlotStatus(booking);
-        const start = new Date(booking.startTime);
-        const end = new Date(booking.endTime);
+      const blocks = availabilityByCourt[court.id] ?? [];
+      blocks.forEach((block) => {
+        const slotStatus = mapAvailabilityToSlotStatus(block);
+        const start = new Date(block.startTime);
+        const end = new Date(block.endTime);
         const bookingStart = start.getHours() * 60 + start.getMinutes();
         const bookingEnd = end.getHours() * 60 + end.getMinutes();
         slotMarkers.forEach((marker, index) => {
@@ -175,7 +170,7 @@ export function VenueDetailPage() {
       result[court.id] = slots;
     });
     return result;
-  }, [bookingsByCourt, courts, selectedDate]);
+  }, [availabilityByCourt, courts, selectedDate]);
 
   const selectedCourt = useMemo(
     () => courts.find((court) => court.id === (selectedRange?.courtId || selectedCourtId)) ?? null,

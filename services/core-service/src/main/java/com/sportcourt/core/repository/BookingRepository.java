@@ -46,6 +46,17 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
                                    @Param("statuses") List<BookingStatus> statuses,
                                    @Param("excludeId") UUID excludeId);
 
+    @Query("select b from Booking b " +
+           "where b.court.id in :courtIds " +
+           "and b.status in :statuses " +
+           "and b.startTime < :endTime " +
+           "and b.endTime > :startTime " +
+           "order by b.court.id, b.startTime")
+    List<Booking> findAvailabilityBlocks(@Param("courtIds") List<UUID> courtIds,
+                                         @Param("startTime") OffsetDateTime startTime,
+                                         @Param("endTime") OffsetDateTime endTime,
+                                         @Param("statuses") List<BookingStatus> statuses);
+
     List<Booking> findByStatusAndStartTimeBefore(BookingStatus status, OffsetDateTime time);
 
     List<Booking> findByStatusAndStartTimeLessThanEqual(BookingStatus status, OffsetDateTime time);

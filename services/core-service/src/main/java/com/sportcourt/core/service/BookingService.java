@@ -3,6 +3,7 @@ package com.sportcourt.core.service;
 import com.sportcourt.core.domain.Booking;
 import com.sportcourt.core.domain.BookingActionIdempotency;
 import com.sportcourt.core.domain.Court;
+import com.sportcourt.core.domain.enums.AvailabilityBlockStatus;
 import com.sportcourt.core.domain.enums.BookingActionType;
 import com.sportcourt.core.domain.enums.BookingStatus;
 import com.sportcourt.core.domain.enums.CustomerTier;
@@ -14,6 +15,7 @@ import com.sportcourt.core.dto.BatchBookingDraftResponse;
 import com.sportcourt.core.dto.BatchConfirmRequest;
 import com.sportcourt.core.dto.BatchDepositItemRequest;
 import com.sportcourt.core.dto.BatchDepositRequest;
+import com.sportcourt.core.dto.AvailabilityBlockResponse;
 import com.sportcourt.core.dto.BookingDraftItemRequest;
 import com.sportcourt.core.dto.BookingDraftRequest;
 import com.sportcourt.core.dto.BookingRescheduleRequest;
@@ -49,6 +51,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -88,6 +91,42 @@ public class BookingService {
         OffsetDateTime normalizedStart = normalizeToUtc(start);
         OffsetDateTime normalizedEnd = normalizeToUtc(end);
         return !bookingRepository.existsOverlap(courtId, normalizedStart, normalizedEnd, activeStatuses());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AvailabilityBlockResponse> listAvailabilityBlocks(List<UUID> courtIds,
+                                                                  OffsetDateTime start,
+                                                                  OffsetDateTime end) {
+        validateTimeRange(start, end);
+        List<UUID> distinctCourtIds = courtIds == null
+            ? List.of()
+            : courtIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (distinctCourtIds.isEmpty()) {
+            return List.of();
+        }
+        if (distinctCourtIds.size() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At most 100 courts can be queried");
+        }
+        if (Duration.between(start, end).toDays() > 31) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Availability range cannot exceed 31 days");
+        }
+
+        return bookingRepository.findAvailabilityBlocks(
+                distinctCourtIds,
+                normalizeToUtc(start),
+                normalizeToUtc(end),
+                activeStatuses()
+            )
+            .stream()
+            .map(booking -> new AvailabilityBlockResponse(
+                booking.getCourt().getId(),
+                toResponseOffset(booking.getStartTime()),
+                toResponseOffset(booking.getEndTime()),
+                booking.getStatus() == BookingStatus.DRAFT
+                    ? AvailabilityBlockStatus.HELD
+                    : AvailabilityBlockStatus.BOOKED
+            ))
+            .toList();
     }
 
     @Transactional

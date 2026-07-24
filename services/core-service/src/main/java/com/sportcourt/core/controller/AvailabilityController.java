@@ -1,12 +1,14 @@
 package com.sportcourt.core.controller;
 
 import com.sportcourt.core.api.ApiResponse;
+import com.sportcourt.core.dto.AvailabilityBlockResponse;
 import com.sportcourt.core.dto.AvailabilityResponse;
 import com.sportcourt.core.service.BookingService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -25,5 +27,14 @@ public class AvailabilityController {
                                                    @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime end) {
         boolean available = bookingService.isAvailable(courtId, start, end);
         return ApiResponse.success(new AvailabilityResponse(available));
+    }
+
+    @GetMapping("/schedule")
+    public ApiResponse<List<AvailabilityBlockResponse>> schedule(
+        @RequestParam List<UUID> courtIds,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime start,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime end
+    ) {
+        return ApiResponse.success(bookingService.listAvailabilityBlocks(courtIds, start, end));
     }
 }
