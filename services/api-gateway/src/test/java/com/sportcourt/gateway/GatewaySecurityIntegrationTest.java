@@ -54,6 +54,7 @@ class GatewaySecurityIntegrationTest {
 
     private static MockWebServer authService;
     private static MockWebServer coreService;
+    private static MockWebServer notificationService;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -66,24 +67,29 @@ class GatewaySecurityIntegrationTest {
 
         authService = new MockWebServer();
         coreService = new MockWebServer();
+        notificationService = new MockWebServer();
 
         authService.setDispatcher(new AuthDispatcher());
         coreService.setDispatcher(new CoreDispatcher());
+        notificationService.setDispatcher(new NotificationDispatcher());
 
         authService.start();
         coreService.start();
+        notificationService.start();
     }
 
     @AfterAll
     static void tearDownServers() throws Exception {
         authService.shutdown();
         coreService.shutdown();
+        notificationService.shutdown();
     }
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
         registry.add("app.downstream.auth-service-url", () -> authService.url("/").toString().replaceAll("/$", ""));
         registry.add("app.downstream.core-service-url", () -> coreService.url("/").toString().replaceAll("/$", ""));
+        registry.add("app.downstream.notification-service-url", () -> notificationService.url("/").toString().replaceAll("/$", ""));
         registry.add("app.security.jwt.issuer-uri", () -> JWT_ISSUER);
         registry.add("app.security.jwt.jwk-set-uri", () -> authService.url("/.well-known/jwks.json").toString());
     }
@@ -151,6 +157,59 @@ class GatewaySecurityIntegrationTest {
             .jsonPath("$.traceId").isNotEmpty()
             .jsonPath("$.timestamp").isNotEmpty()
             .jsonPath("$.path").isEqualTo("/api/core/bookings");
+    }
+
+    @Test
+    void customerNotificationRoutes_shouldSeparateInboxFromAdminApi() {
+        String accessToken = login("customer@test.com");
+
+        webTestClient.get()
+            .uri("/api/notifications/me/unread-count")
+            .headers(headers -> headers.setBearerAuth(accessToken))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.count").isEqualTo(2);
+
+        webTestClient.get()
+            .uri("/api/notifications")
+            .headers(headers -> headers.setBearerAuth(accessToken))
+            .exchange()
+            .expectStatus().isForbidden();
+    }
+
+    @Test
+    void adminNotificationRoutes_shouldAllowInboxAndAdminApi() {
+        String accessToken = login("admin@test.com");
+
+        webTestClient.get()
+            .uri("/api/notifications/me/unread-count")
+            .headers(headers -> headers.setBearerAuth(accessToken))
+            .exchange()
+            .expectStatus().isOk();
+
+        webTestClient.get()
+            .uri("/api/notifications")
+            .headers(headers -> headers.setBearerAuth(accessToken))
+            .exchange()
+            .expectStatus().isOk();
+    }
+
+    private String login(String email) {
+        EntityExchangeResult<AuthTokenStub> loginResult = webTestClient.post()
+            .uri("/api/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue("""
+                {
+                  "email": "%s",
+                  "password": "strongPass123"
+                }
+                """.formatted(email))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(AuthTokenStub.class)
+            .returnResult();
+        return loginResult.getResponseBody().accessToken();
     }
 
     @Test
@@ -307,13 +366,16 @@ class GatewaySecurityIntegrationTest {
 
             if ("POST".equals(request.getMethod()) && "/api/auth/login".equals(request.getPath())) {
                 String body = request.getBody().readUtf8();
+                boolean admin = body.contains("admin@test.com");
                 boolean owner = body.contains("owner@test.com");
 
-                UUID userId = owner
+                UUID userId = admin
+                    ? UUID.fromString("33333333-3333-3333-3333-333333333333")
+                    : owner
                     ? UUID.fromString("22222222-2222-2222-2222-222222222222")
                     : UUID.fromString("11111111-1111-1111-1111-111111111111");
-                String email = owner ? "owner@test.com" : "customer@test.com";
-                List<String> roles = owner ? List.of("OWNER") : List.of("CUSTOMER");
+                String email = admin ? "admin@test.com" : owner ? "owner@test.com" : "customer@test.com";
+                List<String> roles = admin ? List.of("ADMIN") : owner ? List.of("OWNER") : List.of("CUSTOMER");
 
                 String token;
                 try {
@@ -350,6 +412,20 @@ class GatewaySecurityIntegrationTest {
                 return new MockResponse()
                     .setResponseCode(302)
                     .addHeader("Location", "/oauth2/authorization/google");
+            }
+            return new MockResponse().setResponseCode(404);
+        }
+    }
+
+    private static final class NotificationDispatcher extends Dispatcher {
+        @Override
+        public MockResponse dispatch(RecordedRequest request) {
+            String path = pathWithoutQuery(request.getPath());
+            if ("GET".equals(request.getMethod()) && "/api/notifications/me/unread-count".equals(path)) {
+                return ok(200, "{\"count\":2}");
+            }
+            if ("GET".equals(request.getMethod()) && "/api/notifications".equals(path)) {
+                return ok(200, "{\"content\":[]}");
             }
             return new MockResponse().setResponseCode(404);
         }

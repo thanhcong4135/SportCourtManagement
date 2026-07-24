@@ -12,6 +12,8 @@ public record NotificationResponse(
     String recipient,
     NotificationChannel channel,
     String templateCode,
+    String title,
+    String deepLink,
     String message,
     Map<String, String> metadata,
     UUID bookingId,
@@ -24,6 +26,8 @@ public record NotificationResponse(
     String lastError,
     OffsetDateTime createdAt,
     OffsetDateTime sentAt,
+    OffsetDateTime readAt,
+    boolean unread,
     OffsetDateTime updatedAt
 ) {
 }

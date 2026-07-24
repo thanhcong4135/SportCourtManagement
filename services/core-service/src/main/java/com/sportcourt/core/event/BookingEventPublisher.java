@@ -35,11 +35,13 @@ public class BookingEventPublisher {
 
     public void publish(BookingEventType type, Booking booking) {
         BookingEvent event = new BookingEvent();
+        event.setSchemaVersion("1.1");
         event.setEventId(UUID.randomUUID());
         event.setType(type);
         event.setBookingId(booking.getId());
         event.setCourtId(booking.getCourt() != null ? booking.getCourt().getId() : null);
         event.setCustomerId(booking.getCustomerId());
+        event.setCustomerEmail(booking.getCustomerEmail());
         event.setStatus(booking.getStatus());
         event.setPaymentStatus(booking.getPaymentStatus());
         event.setStartTime(booking.getStartTime());

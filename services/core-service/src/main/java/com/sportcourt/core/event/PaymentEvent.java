@@ -17,6 +17,7 @@ public class PaymentEvent {
     private UUID paymentId;
     private UUID bookingId;
     private UUID customerId;
+    private String customerEmail;
     private BigDecimal amount;
     private String providerReference;
     private OffsetDateTime occurredAt;

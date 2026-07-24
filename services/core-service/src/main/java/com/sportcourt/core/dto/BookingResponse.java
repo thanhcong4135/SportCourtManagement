@@ -17,6 +17,7 @@ public record BookingResponse(
     OffsetDateTime endTime,
     BigDecimal priceTotal,
     BigDecimal depositRequired,
-    BigDecimal depositPaid
+    BigDecimal depositPaid,
+    String customerEmail
 ) {
 }

@@ -109,6 +109,7 @@ public class PaymentService {
                 request.customerId(),
                 request.amount(),
                 request.currency(),
+                null,
                 request.idempotencyKey()
             ));
     }
@@ -117,6 +118,15 @@ public class PaymentService {
     public PaymentTransactionResponse initiateDepositForBookingEvent(UUID bookingId,
                                                                      UUID customerId,
                                                                      BigDecimal bookingPriceTotal,
+                                                                     String eventId) {
+        return initiateDepositForBookingEvent(bookingId, customerId, bookingPriceTotal, null, eventId);
+    }
+
+    @Transactional
+    public PaymentTransactionResponse initiateDepositForBookingEvent(UUID bookingId,
+                                                                     UUID customerId,
+                                                                     BigDecimal bookingPriceTotal,
+                                                                     String customerEmail,
                                                                      String eventId) {
         BigDecimal depositAmount = bookingPriceTotal
             .multiply(depositRatio)
@@ -128,6 +138,7 @@ public class PaymentService {
                 customerId,
                 depositAmount,
                 "VND",
+                customerEmail,
                 eventId
             ));
     }
@@ -176,10 +187,12 @@ public class PaymentService {
                                                              UUID customerId,
                                                              BigDecimal amount,
                                                              String currency,
+                                                             String customerEmail,
                                                              String idempotencyKey) {
         PaymentTransaction payment = new PaymentTransaction();
         payment.setBookingId(bookingId);
         payment.setCustomerId(customerId);
+        payment.setCustomerEmail(normalizeCustomerEmail(customerEmail));
         payment.setAmount(amount);
         payment.setCurrency(normalizeCurrency(currency));
         payment.setType(PaymentType.DEPOSIT);
@@ -199,6 +212,13 @@ public class PaymentService {
 
     private String normalizeCurrency(String currency) {
         return currency.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeCustomerEmail(String customerEmail) {
+        if (customerEmail == null || customerEmail.isBlank()) {
+            return null;
+        }
+        return customerEmail.trim().toLowerCase(Locale.ROOT);
     }
 
     private String trimFailureReason(String reason) {
@@ -239,6 +259,7 @@ public class PaymentService {
             payment.getPaymentRef(),
             payment.getBookingId(),
             payment.getCustomerId(),
+            payment.getCustomerEmail(),
             payment.getAmount(),
             payment.getCurrency(),
             payment.getType(),

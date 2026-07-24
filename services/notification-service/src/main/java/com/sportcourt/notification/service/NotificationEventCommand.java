@@ -16,6 +16,8 @@ public record NotificationEventCommand(
     NotificationChannel channel,
     String recipient,
     String templateCode,
+    String title,
+    String deepLink,
     String message,
     Map<String, String> metadata
 ) {

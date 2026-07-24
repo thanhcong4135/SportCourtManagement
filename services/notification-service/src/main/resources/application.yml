@@ -1,6 +1,20 @@
 spring:
   application:
     name: notification-service
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_STARTTLS_ENABLED:true}
+          connectiontimeout: ${MAIL_CONNECTION_TIMEOUT_MS:5000}
+          timeout: ${MAIL_TIMEOUT_MS:10000}
+          writetimeout: ${MAIL_TIMEOUT_MS:10000}
   datasource:
     url: jdbc:mysql://localhost:${NOTIFICATION_DB_PORT:${MYSQL_NOTIFICATION_PORT:3309}}/notification_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: root
@@ -51,6 +65,11 @@ notification:
   delivery:
     mock:
       fail-recipient-pattern: ""
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:no-reply@sportcourt.vn}
+    from-name: ${MAIL_FROM_NAME:SportCourt}
+    frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:5173}
 
 kafka:
   bootstrap-servers: localhost:9092
@@ -69,3 +88,9 @@ kafka:
   topics:
     booking-events: booking.events
     payment-events: payment.events
+
+app:
+  security:
+    jwt:
+      issuer-uri: ${APP_SECURITY_JWT_ISSUER:https://auth.sportcourt.local}
+      jwk-set-uri: ${APP_SECURITY_JWT_JWK_SET_URI:http://localhost:8082/.well-known/jwks.json}

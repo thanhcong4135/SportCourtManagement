@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { BottomNavigation } from "../../components/BottomNavigation";
 import { StatusBadge, Tabs } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import { CustomerNotificationBell } from "../../features/notification/CustomerNotificationBell";
 import {
   canDepositBooking,
   getBookingStatusLabel,
@@ -187,9 +188,12 @@ export function AccountPage() {
       <header className="simple-topbar">
         <Link to="/discover" className="back-link">←</Link>
         <h1>Danh sách đặt lịch</h1>
-        <button type="button" className="icon-btn" onClick={() => { void logout(); }}>
-          Đăng xuất
-        </button>
+        <div className="customer-header-actions">
+          <CustomerNotificationBell />
+          <button type="button" className="icon-btn" onClick={() => { void logout(); }}>
+            Đăng xuất
+          </button>
+        </div>
       </header>
 
       <section className="account-layout">

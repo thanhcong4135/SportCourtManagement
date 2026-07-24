@@ -1,16 +1,24 @@
 package com.sportcourt.notification.service;
 
 import com.sportcourt.notification.domain.NotificationMessage;
+import com.sportcourt.notification.domain.NotificationChannel;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
-public class MockNotificationSender implements NotificationSender {
+@Profile("test")
+public class MockNotificationSender implements NotificationChannelSender {
 
     private final String failRecipientPattern;
 
     public MockNotificationSender(@Value("${notification.delivery.mock.fail-recipient-pattern:}") String failRecipientPattern) {
         this.failRecipientPattern = failRecipientPattern == null ? "" : failRecipientPattern.trim();
+    }
+
+    @Override
+    public NotificationChannel channel() {
+        return NotificationChannel.IN_APP;
     }
 
     @Override

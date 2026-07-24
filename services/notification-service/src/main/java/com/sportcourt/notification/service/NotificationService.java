@@ -1,7 +1,6 @@
 package com.sportcourt.notification.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportcourt.notification.domain.NotificationChannel;
 import com.sportcourt.notification.domain.NotificationMessage;
@@ -21,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,13 +28,11 @@ import java.util.UUID;
 @Service
 public class NotificationService {
 
-    private static final TypeReference<Map<String, String>> MAP_TYPE = new TypeReference<>() {
-    };
-
     private final NotificationMessageRepository notificationMessageRepository;
     private final NotificationSender notificationSender;
     private final NotificationMetrics notificationMetrics;
     private final ObjectMapper objectMapper;
+    private final NotificationResponseMapper responseMapper;
     private final int dispatcherBatchSize;
     private final int dispatcherMaxAttempts;
     private final long initialBackoffMs;
@@ -44,6 +42,7 @@ public class NotificationService {
                                NotificationSender notificationSender,
                                NotificationMetrics notificationMetrics,
                                ObjectMapper objectMapper,
+                               NotificationResponseMapper responseMapper,
                                @Value("${notification.dispatcher.batch-size:100}") int dispatcherBatchSize,
                                @Value("${notification.dispatcher.max-attempts:5}") int dispatcherMaxAttempts,
                                @Value("${notification.dispatcher.initial-backoff-ms:5000}") long initialBackoffMs,
@@ -52,6 +51,7 @@ public class NotificationService {
         this.notificationSender = notificationSender;
         this.notificationMetrics = notificationMetrics;
         this.objectMapper = objectMapper;
+        this.responseMapper = responseMapper;
         this.dispatcherBatchSize = dispatcherBatchSize;
         this.dispatcherMaxAttempts = dispatcherMaxAttempts;
         this.initialBackoffMs = initialBackoffMs;
@@ -61,18 +61,20 @@ public class NotificationService {
     @Transactional
     public NotificationResponse send(NotificationSendRequest request) {
         NotificationMessage message = new NotificationMessage();
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime now = utcNow();
         message.setStatus(NotificationStatus.QUEUED);
         message.setChannel(request.channel());
         message.setRecipient(request.recipient().trim());
         message.setTemplateCode(normalizeTemplateCode(request.templateCode()));
+        message.setTitle(request.title().trim());
+        message.setDeepLink(normalizeDeepLink(request.deepLink()));
         message.setMessage(request.message().trim());
         message.setMetadataJson(toMetadataJson(request.metadata()));
         message.setRetryCount(0);
         message.setNextAttemptAt(now);
         message.setCreatedAt(now);
         message.setUpdatedAt(now);
-        return toResponse(notificationMessageRepository.save(message));
+        return responseMapper.toResponse(notificationMessageRepository.save(message));
     }
 
     @Transactional
@@ -88,15 +90,17 @@ public class NotificationService {
             )
             .orElse(null);
         if (existing != null) {
-            return toResponse(existing);
+            return responseMapper.toResponse(existing);
         }
 
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime now = utcNow();
         NotificationMessage message = new NotificationMessage();
         message.setStatus(NotificationStatus.QUEUED);
         message.setChannel(command.channel());
         message.setRecipient(command.recipient().trim());
         message.setTemplateCode(command.templateCode());
+        message.setTitle(command.title().trim());
+        message.setDeepLink(normalizeDeepLink(command.deepLink()));
         message.setMessage(command.message());
         message.setMetadataJson(toMetadataJson(command.metadata()));
         message.setSourceTopic(command.sourceTopic());
@@ -112,7 +116,7 @@ public class NotificationService {
         message.setUpdatedAt(now);
 
         try {
-            return toResponse(notificationMessageRepository.save(message));
+            return responseMapper.toResponse(notificationMessageRepository.save(message));
         } catch (DataIntegrityViolationException ex) {
             NotificationMessage replayed = notificationMessageRepository
                 .findBySourceEventIdAndChannelAndRecipientAndTemplateCode(
@@ -122,7 +126,7 @@ public class NotificationService {
                     command.templateCode()
                 )
                 .orElseThrow(() -> ex);
-            return toResponse(replayed);
+            return responseMapper.toResponse(replayed);
         }
     }
 
@@ -130,7 +134,7 @@ public class NotificationService {
     public NotificationResponse getById(UUID notificationId) {
         NotificationMessage message = notificationMessageRepository.findById(notificationId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
-        return toResponse(message);
+        return responseMapper.toResponse(message);
     }
 
     @Transactional(readOnly = true)
@@ -140,21 +144,21 @@ public class NotificationService {
                                            Pageable pageable) {
         if (bookingId != null) {
             return notificationMessageRepository.findByBookingIdOrderByCreatedAtDesc(bookingId, pageable)
-                .map(this::toResponse);
+                .map(responseMapper::toResponse);
         }
         if (customerId != null) {
             return notificationMessageRepository.findByCustomerIdOrderByCreatedAtDesc(customerId, pageable)
-                .map(this::toResponse);
+                .map(responseMapper::toResponse);
         }
 
         if (status != null) {
             return notificationMessageRepository.findAll(
                 (root, query, builder) -> builder.equal(root.get("status"), status),
                 pageable
-            ).map(this::toResponse);
+            ).map(responseMapper::toResponse);
         }
 
-        return notificationMessageRepository.findAll(pageable).map(this::toResponse);
+        return notificationMessageRepository.findAll(pageable).map(responseMapper::toResponse);
     }
 
     @Transactional
@@ -165,17 +169,17 @@ public class NotificationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only FAILED notifications can be retried");
         }
 
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime now = utcNow();
         message.setStatus(NotificationStatus.QUEUED);
         message.setLastError(null);
         message.setNextAttemptAt(now);
         message.setUpdatedAt(now);
-        return toResponse(notificationMessageRepository.save(message));
+        return responseMapper.toResponse(notificationMessageRepository.save(message));
     }
 
     @Transactional
     public void dispatchPending() {
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime now = utcNow();
         List<NotificationMessage> batch = notificationMessageRepository.findBatchForDispatch(
             List.of(NotificationStatus.QUEUED),
             now,
@@ -231,6 +235,17 @@ public class NotificationService {
         return templateCode.trim();
     }
 
+    private String normalizeDeepLink(String deepLink) {
+        if (deepLink == null || deepLink.isBlank()) {
+            return null;
+        }
+        String normalized = deepLink.trim();
+        if (!normalized.startsWith("/") || normalized.startsWith("//") || normalized.contains("://")) {
+            throw new IllegalArgumentException("deepLink must be an internal relative path");
+        }
+        return normalized;
+    }
+
     private void validateEventCommand(NotificationEventCommand command) {
         if (command.sourceEventId() == null || command.sourceEventId().isBlank()) {
             throw new IllegalArgumentException("Event notification requires sourceEventId");
@@ -244,6 +259,10 @@ public class NotificationService {
         if (command.templateCode() == null || command.templateCode().isBlank()) {
             throw new IllegalArgumentException("Event notification requires templateCode");
         }
+        if (command.title() == null || command.title().isBlank() || command.title().length() > 180) {
+            throw new IllegalArgumentException("Event notification requires a title up to 180 characters");
+        }
+        normalizeDeepLink(command.deepLink());
         if (command.message() == null || command.message().isBlank()) {
             throw new IllegalArgumentException("Event notification requires message");
         }
@@ -260,17 +279,6 @@ public class NotificationService {
         }
     }
 
-    private Map<String, String> toMetadataMap(String metadataJson) {
-        if (metadataJson == null || metadataJson.isBlank()) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(metadataJson, MAP_TYPE);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Failed to parse notification metadata", ex);
-        }
-    }
-
     private String truncate(String message) {
         if (message == null) {
             return null;
@@ -278,26 +286,8 @@ public class NotificationService {
         return message.length() <= 1024 ? message : message.substring(0, 1024);
     }
 
-    private NotificationResponse toResponse(NotificationMessage message) {
-        return new NotificationResponse(
-            message.getId(),
-            message.getStatus().name(),
-            message.getRecipient(),
-            message.getChannel(),
-            message.getTemplateCode(),
-            message.getMessage(),
-            toMetadataMap(message.getMetadataJson()),
-            message.getBookingId(),
-            message.getPaymentId(),
-            message.getCustomerId(),
-            message.getSourceEventId(),
-            message.getSourceEventType(),
-            message.getTraceId(),
-            message.getRetryCount(),
-            message.getLastError(),
-            message.getCreatedAt(),
-            message.getSentAt(),
-            message.getUpdatedAt()
-        );
+    private OffsetDateTime utcNow() {
+        return OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
     }
+
 }

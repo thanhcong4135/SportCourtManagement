@@ -13,6 +13,7 @@ public record PaymentTransactionResponse(
     String paymentRef,
     UUID bookingId,
     UUID customerId,
+    String customerEmail,
     BigDecimal amount,
     String currency,
     PaymentType type,

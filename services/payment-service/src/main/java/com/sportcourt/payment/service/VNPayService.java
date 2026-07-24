@@ -74,6 +74,10 @@ public class VNPayService {
         payment.setPaymentRef(paymentRef);
         payment.setBookingId(request.bookingId());
         payment.setCustomerId(request.customerId() == null ? UNKNOWN_CUSTOMER_ID : request.customerId());
+        paymentTransactionRepository
+            .findFirstByBookingIdAndCustomerEmailIsNotNullOrderByRequestedAtDesc(request.bookingId())
+            .map(PaymentTransaction::getCustomerEmail)
+            .ifPresent(payment::setCustomerEmail);
         payment.setAmount(request.amount().setScale(2, RoundingMode.HALF_UP));
         payment.setCurrency(properties.getCurrCode());
         payment.setType(PaymentType.DEPOSIT);

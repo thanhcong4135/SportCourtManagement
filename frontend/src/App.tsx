@@ -22,6 +22,7 @@ const PaymentResultPage = lazy(() => import("./pages/customer/PaymentResultPage"
 const BookingSuccessPage = lazy(() => import("./pages/customer/BookingSuccessPage").then((module) => ({ default: module.BookingSuccessPage })));
 const AccountPage = lazy(() => import("./pages/customer/AccountPage").then((module) => ({ default: module.AccountPage })));
 const BookingDetailPage = lazy(() => import("./pages/customer/BookingDetailPage").then((module) => ({ default: module.BookingDetailPage })));
+const CustomerNotificationsPage = lazy(() => import("./pages/customer/CustomerNotificationsPage").then((module) => ({ default: module.CustomerNotificationsPage })));
 const AuthLoginPage = lazy(() => import("./pages/auth/AuthLoginPage").then((module) => ({ default: module.AuthLoginPage })));
 const AuthRegisterPage = lazy(() => import("./pages/auth/AuthRegisterPage").then((module) => ({ default: module.AuthRegisterPage })));
 const OAuth2RedirectPage = lazy(() => import("./pages/auth/OAuth2RedirectPage").then((module) => ({ default: module.OAuth2RedirectPage })));
@@ -100,6 +101,14 @@ function App() {
           element={(
             <ProtectedRoute roles={CUSTOMER_BOOKING_ROLES}>
               <BookingDetailPage />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/account/notifications"
+          element={(
+            <ProtectedRoute roles={CUSTOMER_BOOKING_ROLES}>
+              <CustomerNotificationsPage />
             </ProtectedRoute>
           )}
         />

@@ -324,14 +324,16 @@ class BookingServiceIntegrationTest {
     @Test
     void createDraft_shouldEnqueueOutboxEvent() throws Exception {
         Court court = createCourt("Court-Outbox");
-        bookingService.createDraft(new BookingDraftRequest(
+        BookingResponse response = bookingService.createDraft(new BookingDraftRequest(
             court.getId(),
             UUID.randomUUID(),
             time(2026, 3, 20, 8, 0),
             time(2026, 3, 20, 10, 0),
-            money("200000")
+            money("200000"),
+            "  Customer@Example.COM "
         ));
 
+        assertThat(response.customerEmail()).isEqualTo("customer@example.com");
         List<OutboxEvent> events = outboxEventRepository.findAll();
         assertThat(events).hasSize(1);
         OutboxEvent event = events.get(0);
@@ -340,7 +342,9 @@ class BookingServiceIntegrationTest {
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(event.getPayload()).isNotBlank();
         JsonNode payload = objectMapper.readTree(event.getPayload());
+        assertThat(payload.path("schemaVersion").asText()).isEqualTo("1.1");
         assertThat(payload.path("eventId").asText()).isNotBlank();
+        assertThat(payload.path("customerEmail").asText()).isEqualTo("customer@example.com");
     }
 
     @Test

@@ -8,7 +8,10 @@ export type NotificationMessage = {
   recipient: string;
   channel: string;
   templateCode: string;
+  title: string;
+  deepLink?: string;
   message: string;
+  metadata?: Record<string, string>;
   bookingId?: string;
   paymentId?: string;
   customerId?: string;
@@ -19,6 +22,8 @@ export type NotificationMessage = {
   lastError?: string;
   createdAt: string;
   sentAt?: string;
+  readAt?: string;
+  unread: boolean;
   updatedAt: string;
 };
 
@@ -61,5 +66,35 @@ export async function retryNotification(notificationId: string) {
     headers: {
       "Idempotency-Key": createIdempotencyKey("notification-retry"),
     },
+  });
+}
+
+export async function listMyNotifications(params: {
+  unreadOnly?: boolean;
+  page?: number;
+  size?: number;
+}) {
+  const search = new URLSearchParams({
+    unreadOnly: String(params.unreadOnly ?? false),
+    page: String(params.page ?? 0),
+    size: String(params.size ?? 20),
+    sort: "createdAt,desc",
+  });
+  return apiFetch<SpringPage<NotificationMessage>>(`/api/notifications/me?${search.toString()}`);
+}
+
+export async function getMyUnreadNotificationCount() {
+  return apiFetch<{ count: number }>("/api/notifications/me/unread-count");
+}
+
+export async function markMyNotificationRead(notificationId: string) {
+  return apiFetch<NotificationMessage>(`/api/notifications/me/${notificationId}/read`, {
+    method: "PATCH",
+  });
+}
+
+export async function markAllMyNotificationsRead() {
+  return apiFetch<{ updated: number }>("/api/notifications/me/read-all", {
+    method: "PATCH",
   });
 }

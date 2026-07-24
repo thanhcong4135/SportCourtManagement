@@ -12,13 +12,14 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
 public class BookingEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(BookingEventConsumer.class);
-    private static final String SUPPORTED_SCHEMA_VERSION = "1.0";
+    private static final Set<String> SUPPORTED_SCHEMA_VERSIONS = Set.of("1.0", "1.1");
 
     private final ObjectMapper objectMapper;
     private final PaymentService paymentService;
@@ -52,9 +53,16 @@ public class BookingEventConsumer {
 
             UUID bookingId = UUID.fromString(event.path("bookingId").asText());
             UUID customerId = UUID.fromString(event.path("customerId").asText());
+            String customerEmail = event.path("customerEmail").asText(null);
             BigDecimal priceTotal = event.path("priceTotal").decimalValue();
 
-            paymentService.initiateDepositForBookingEvent(bookingId, customerId, priceTotal, eventId);
+            paymentService.initiateDepositForBookingEvent(
+                bookingId,
+                customerId,
+                priceTotal,
+                customerEmail,
+                eventId
+            );
         } catch (IllegalArgumentException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -76,7 +84,7 @@ public class BookingEventConsumer {
         if (schemaVersion == null || schemaVersion.isBlank()) {
             return;
         }
-        if (!SUPPORTED_SCHEMA_VERSION.equals(schemaVersion)) {
+        if (!SUPPORTED_SCHEMA_VERSIONS.contains(schemaVersion)) {
             throw new IllegalArgumentException("Unsupported booking event schemaVersion: " + schemaVersion);
         }
     }

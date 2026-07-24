@@ -85,6 +85,13 @@ services:
     ports:
       - "6379:6379"
 
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    container_name: sc-mailpit
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
   kafka:
     image: confluentinc/cp-kafka:7.7.1
     container_name: sc-kafka
@@ -151,6 +158,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      auth-service:
+        condition: service_started
 
   auth-service:
     build:
@@ -202,12 +211,30 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: 123456
       KAFKA_BOOTSTRAP_SERVERS: sc-kafka:9092
+      APP_SECURITY_JWT_ISSUER: https://auth.sportcourt.local
+      APP_SECURITY_JWT_JWK_SET_URI: http://auth-service:8082/.well-known/jwks.json
+      MAIL_ENABLED: ${MAIL_ENABLED:-true}
+      MAIL_HOST: ${MAIL_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@sportcourt.vn}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SportCourt}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_STARTTLS_ENABLED: ${MAIL_STARTTLS_ENABLED:-false}
+      MAIL_CONNECTION_TIMEOUT_MS: ${MAIL_CONNECTION_TIMEOUT_MS:-5000}
+      MAIL_TIMEOUT_MS: ${MAIL_TIMEOUT_MS:-10000}
+      APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:-http://localhost:5173}
     ports:
       - "8084:8084"
     depends_on:
       mysql-notification:
         condition: service_healthy
       kafka:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      mailpit:
         condition: service_started
 
   reporting-service:

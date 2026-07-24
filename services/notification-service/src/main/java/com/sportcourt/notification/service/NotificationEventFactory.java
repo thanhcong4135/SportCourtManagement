@@ -4,29 +4,40 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.sportcourt.notification.domain.NotificationChannel;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Component
 public class NotificationEventFactory {
 
-    private static final String SUPPORTED_SCHEMA_VERSION = "1.0";
+    private static final Set<String> SUPPORTED_SCHEMA_VERSIONS = Set.of("1.0", "1.1");
+    private static final Set<String> BOOKING_EMAIL_ALLOWLIST = Set.of("BOOKING_CONFIRMED");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile(
+        "^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$",
+        Pattern.CASE_INSENSITIVE
+    );
 
-    public NotificationEventCommand fromBookingEvent(JsonNode event, String topic, String headerEventId) {
+    public List<NotificationEventCommand> fromBookingEvent(JsonNode event,
+                                                            String topic,
+                                                            String headerEventId) {
         validateSchemaVersion(event.path("schemaVersion").asText(null), "booking");
 
-        String type = event.path("type").asText();
-        if (type == null || type.isBlank()) {
-            throw new IllegalArgumentException("Booking event missing type");
-        }
+        String type = readType(event, "Booking");
         if (!isSupportedBookingType(type)) {
-            return null;
+            return List.of();
         }
 
         UUID bookingId = readUuid(event, "bookingId", true);
-        UUID customerId = readUuid(event, "customerId", true);
+        UUID customerId = readUuid(event, "customerId", false);
+        String customerEmail = normalizeValidEmail(event.path("customerEmail").asText(null));
         String eventId = readEventId(event, headerEventId);
+        String deepLink = "/account/bookings/" + bookingId;
 
         Map<String, String> metadata = new HashMap<>();
         metadata.put("source", "booking.events");
@@ -37,68 +48,70 @@ public class NotificationEventFactory {
         putIfNotBlank(metadata, "startTime", event.path("startTime").asText(null));
         putIfNotBlank(metadata, "endTime", event.path("endTime").asText(null));
 
-        String templateCode = type;
-        String message = switch (type) {
-            case "BOOKING_DRAFT_CREATED" -> "Booking draft has been created and is waiting for confirmation.";
-            case "BOOKING_CONFIRMED" -> "Booking has been confirmed successfully.";
-            case "BOOKING_CANCELED" -> "Booking has been canceled.";
-            case "BOOKING_IN_PROGRESS" -> "Booking is now in progress.";
-            case "BOOKING_COMPLETED" -> "Booking has been completed.";
-            case "BOOKING_DEPOSITED" -> "Deposit has been received for your booking.";
-            case "BOOKING_PAYMENT_FAILED" -> "Payment for your booking failed. Please retry.";
-            default -> "Booking status has been updated.";
-        };
-
-        return new NotificationEventCommand(
-            topic,
-            eventId,
-            type,
-            bookingId,
-            null,
-            customerId,
-            eventId,
-            NotificationChannel.IN_APP,
-            customerId.toString(),
-            templateCode,
-            message,
-            metadata
-        );
+        TemplateContent content = bookingTemplate(type);
+        List<NotificationEventCommand> commands = new ArrayList<>(2);
+        if (customerId != null) {
+            commands.add(command(
+                topic, eventId, type, bookingId, null, customerId,
+                NotificationChannel.IN_APP, customerId.toString(), content, deepLink, metadata
+            ));
+        }
+        if (customerEmail != null && BOOKING_EMAIL_ALLOWLIST.contains(type)) {
+            commands.add(command(
+                topic, eventId, type, bookingId, null, customerId,
+                NotificationChannel.EMAIL, customerEmail, content, deepLink, metadata
+            ));
+        }
+        return List.copyOf(commands);
     }
 
-    public NotificationEventCommand fromPaymentEvent(JsonNode event, String topic, String headerEventId) {
+    public List<NotificationEventCommand> fromPaymentEvent(JsonNode event,
+                                                            String topic,
+                                                            String headerEventId) {
         validateSchemaVersion(event.path("schemaVersion").asText(null), "payment");
 
-        String type = event.path("type").asText();
-        if (type == null || type.isBlank()) {
-            throw new IllegalArgumentException("Payment event missing type");
-        }
+        String type = readType(event, "Payment");
         if (!isSupportedPaymentType(type)) {
-            return null;
+            return List.of();
         }
 
         UUID paymentId = readUuid(event, "paymentId", true);
         UUID bookingId = readUuid(event, "bookingId", true);
         UUID customerId = readUuid(event, "customerId", false);
         String eventId = readEventId(event, headerEventId);
-
-        String recipient = customerId != null ? customerId.toString() : bookingId.toString();
+        String deepLink = "/account/bookings/" + bookingId;
 
         Map<String, String> metadata = new HashMap<>();
         metadata.put("source", "payment.events");
         metadata.put("paymentId", paymentId.toString());
         metadata.put("bookingId", bookingId.toString());
-        putIfNotBlank(metadata, "providerReference", event.path("providerReference").asText(null));
         if (customerId != null) {
             metadata.put("customerId", customerId.toString());
         }
+        putIfNotBlank(metadata, "providerReference", event.path("providerReference").asText(null));
 
-        String templateCode = type;
-        String message = switch (type) {
-            case "DEPOSIT_SUCCEEDED" -> "Deposit payment succeeded.";
-            case "DEPOSIT_FAILED" -> "Deposit payment failed. Please retry.";
-            default -> "Payment status has been updated.";
-        };
+        TemplateContent content = paymentTemplate(type);
+        List<NotificationEventCommand> commands = new ArrayList<>(2);
+        if (customerId != null) {
+            commands.add(command(
+                topic, eventId, type, bookingId, paymentId, customerId,
+                NotificationChannel.IN_APP, customerId.toString(), content, deepLink, metadata
+            ));
+        }
+        return List.copyOf(commands);
+    }
 
+    private NotificationEventCommand command(String topic,
+                                             String eventId,
+                                             String type,
+                                             UUID bookingId,
+                                             UUID paymentId,
+                                             UUID customerId,
+                                             NotificationChannel channel,
+                                             String recipient,
+                                             TemplateContent content,
+                                             String deepLink,
+                                             Map<String, String> metadata) {
         return new NotificationEventCommand(
             topic,
             eventId,
@@ -107,19 +120,77 @@ public class NotificationEventFactory {
             paymentId,
             customerId,
             eventId,
-            NotificationChannel.IN_APP,
+            channel,
             recipient,
-            templateCode,
-            message,
+            type,
+            content.title(),
+            deepLink,
+            content.message(),
             metadata
         );
+    }
+
+    private TemplateContent bookingTemplate(String type) {
+        return switch (type) {
+            case "BOOKING_DRAFT_CREATED" -> new TemplateContent(
+                "Đã tạo yêu cầu đặt sân",
+                "Yêu cầu đặt sân của bạn đã được tạo và đang chờ xác nhận."
+            );
+            case "BOOKING_CONFIRMED" -> new TemplateContent(
+                "Đặt sân thành công",
+                "Booking của bạn đã được xác nhận thành công."
+            );
+            case "BOOKING_CANCELED" -> new TemplateContent(
+                "Booking đã bị hủy",
+                "Booking của bạn đã được hủy."
+            );
+            case "BOOKING_IN_PROGRESS" -> new TemplateContent(
+                "Phiên chơi đã bắt đầu",
+                "Phiên chơi của bạn đã bắt đầu."
+            );
+            case "BOOKING_COMPLETED" -> new TemplateContent(
+                "Phiên chơi đã hoàn thành",
+                "Phiên chơi của bạn đã hoàn thành."
+            );
+            case "BOOKING_DEPOSITED" -> new TemplateContent(
+                "Đã nhận tiền đặt cọc",
+                "SportCourt đã nhận tiền đặt cọc cho booking của bạn."
+            );
+            case "BOOKING_PAYMENT_FAILED" -> new TemplateContent(
+                "Thanh toán booking thất bại",
+                "Thanh toán cho booking chưa thành công. Vui lòng kiểm tra và thử lại."
+            );
+            default -> throw new IllegalArgumentException("Unsupported booking notification type: " + type);
+        };
+    }
+
+    private TemplateContent paymentTemplate(String type) {
+        return switch (type) {
+            case "DEPOSIT_SUCCEEDED" -> new TemplateContent(
+                "Thanh toán đặt cọc thành công",
+                "Khoản đặt cọc của bạn đã được thanh toán thành công."
+            );
+            case "DEPOSIT_FAILED" -> new TemplateContent(
+                "Thanh toán đặt cọc thất bại",
+                "Thanh toán đặt cọc chưa thành công. Vui lòng kiểm tra và thử lại."
+            );
+            default -> throw new IllegalArgumentException("Unsupported payment notification type: " + type);
+        };
+    }
+
+    private String readType(JsonNode event, String domain) {
+        String type = event.path("type").asText(null);
+        if (type == null || type.isBlank()) {
+            throw new IllegalArgumentException(domain + " event missing type");
+        }
+        return type;
     }
 
     private void validateSchemaVersion(String schemaVersion, String domain) {
         if (schemaVersion == null || schemaVersion.isBlank()) {
             return;
         }
-        if (!SUPPORTED_SCHEMA_VERSION.equals(schemaVersion)) {
+        if (!SUPPORTED_SCHEMA_VERSIONS.contains(schemaVersion)) {
             throw new IllegalArgumentException("Unsupported " + domain + " event schemaVersion: " + schemaVersion);
         }
     }
@@ -160,9 +231,23 @@ public class NotificationEventFactory {
         throw new IllegalArgumentException("Event missing eventId");
     }
 
+    private String normalizeValidEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        String normalized = email.trim().toLowerCase(Locale.ROOT);
+        if (normalized.length() > 128 || !EMAIL_PATTERN.matcher(normalized).matches()) {
+            return null;
+        }
+        return normalized;
+    }
+
     private void putIfNotBlank(Map<String, String> metadata, String key, String value) {
         if (value != null && !value.isBlank()) {
             metadata.put(key, value);
         }
+    }
+
+    private record TemplateContent(String title, String message) {
     }
 }

@@ -17,7 +17,7 @@ import java.util.UUID;
 public class BookingOutboxService {
 
     private static final String AGGREGATE_TYPE = "BOOKING";
-    private static final String SCHEMA_VERSION = "1.0";
+    private static final String SCHEMA_VERSION = "1.1";
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
@@ -59,6 +59,7 @@ public class BookingOutboxService {
             ? booking.getCourt().getVenue().getId()
             : null);
         event.setCustomerId(booking.getCustomerId());
+        event.setCustomerEmail(booking.getCustomerEmail());
         event.setStatus(booking.getStatus());
         event.setPaymentStatus(booking.getPaymentStatus());
         event.setStartTime(booking.getStartTime());

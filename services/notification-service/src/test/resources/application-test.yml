@@ -35,3 +35,9 @@ notification:
   delivery:
     mock:
       fail-recipient-pattern: fail
+
+app:
+  security:
+    jwt:
+      issuer-uri: https://test-auth.local
+      jwk-set-uri: http://localhost:18082/.well-known/jwks.json

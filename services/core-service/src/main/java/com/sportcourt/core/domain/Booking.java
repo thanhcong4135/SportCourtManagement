@@ -37,6 +37,9 @@ public class Booking {
     @Column(name = "customer_id")
     private UUID customerId;
 
+    @Column(name = "customer_email", length = 128)
+    private String customerEmail;
+
     @Column(name = "idempotency_key", length = 128)
     private String idempotencyKey;
 

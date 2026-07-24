@@ -2,7 +2,6 @@ package com.sportcourt.notification.consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sportcourt.notification.service.NotificationEventCommand;
 import com.sportcourt.notification.service.NotificationEventFactory;
 import com.sportcourt.notification.service.NotificationService;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -36,10 +35,8 @@ public class PaymentEventConsumer {
                         @Header(name = "event-id", required = false) String headerEventId) {
         try {
             JsonNode event = objectMapper.readTree(payload);
-            NotificationEventCommand command = notificationEventFactory.fromPaymentEvent(event, topic, headerEventId);
-            if (command != null) {
-                notificationService.queueFromEvent(command);
-            }
+            notificationEventFactory.fromPaymentEvent(event, topic, headerEventId)
+                .forEach(notificationService::queueFromEvent);
         } catch (IllegalArgumentException ex) {
             throw ex;
         } catch (Exception ex) {

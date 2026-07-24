@@ -11,6 +11,7 @@ public class PaymentEvent {
     private UUID paymentId;
     private UUID bookingId;
     private UUID customerId;
+    private String customerEmail;
     private BigDecimal amount;
     private String providerReference;
     private OffsetDateTime occurredAt;
@@ -61,6 +62,14 @@ public class PaymentEvent {
 
     public void setCustomerId(UUID customerId) {
         this.customerId = customerId;
+    }
+
+    public String getCustomerEmail() {
+        return customerEmail;
+    }
+
+    public void setCustomerEmail(String customerEmail) {
+        this.customerEmail = customerEmail;
     }
 
     public BigDecimal getAmount() {

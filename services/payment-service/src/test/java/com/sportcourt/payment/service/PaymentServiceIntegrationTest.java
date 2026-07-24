@@ -134,12 +134,15 @@ class PaymentServiceIntegrationTest {
             bookingId,
             customerId,
             new BigDecimal("400000"),
+            " Customer@Example.COM ",
             "event-1"
         );
 
         assertThat(payment.amount()).isEqualByComparingTo("200000.00");
+        assertThat(payment.customerEmail()).isEqualTo("customer@example.com");
         List<PaymentTransactionResponse> byBooking = paymentService.listByBooking(bookingId);
         assertThat(byBooking).hasSize(1);
+        assertThat(byBooking.get(0).customerEmail()).isEqualTo("customer@example.com");
     }
 
     @Test

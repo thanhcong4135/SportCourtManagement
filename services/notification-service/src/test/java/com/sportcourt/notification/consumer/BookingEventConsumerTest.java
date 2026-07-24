@@ -39,6 +39,31 @@ class BookingEventConsumerTest {
     }
 
     @Test
+    void consumeSchemaOnePointOne_shouldQueueInAppAndEmail() {
+        NotificationService notificationService = mock(NotificationService.class);
+        BookingEventConsumer consumer = new BookingEventConsumer(
+            new ObjectMapper(),
+            new NotificationEventFactory(),
+            notificationService
+        );
+
+        String payload = """
+            {
+              "schemaVersion":"1.1",
+              "eventId":"evt-1-1",
+              "type":"BOOKING_CONFIRMED",
+              "bookingId":"11111111-1111-1111-1111-111111111111",
+              "customerId":"22222222-2222-2222-2222-222222222222",
+              "customerEmail":"customer@example.com"
+            }
+            """;
+
+        consumer.consume(payload, "booking.events", null);
+
+        verify(notificationService, times(2)).queueFromEvent(any());
+    }
+
+    @Test
     void consume_shouldRejectUnsupportedSchemaVersion() {
         NotificationService notificationService = mock(NotificationService.class);
         BookingEventConsumer consumer = new BookingEventConsumer(

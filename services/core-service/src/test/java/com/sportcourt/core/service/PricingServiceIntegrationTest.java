@@ -11,6 +11,7 @@ import com.sportcourt.core.dto.PricingQuoteResponse;
 import com.sportcourt.core.dto.PricingRuleCreateRequest;
 import com.sportcourt.core.dto.PricingRuleResponse;
 import com.sportcourt.core.dto.VenueCreateRequest;
+import com.sportcourt.core.exception.BusinessException;
 import com.sportcourt.core.repository.CourtRepository;
 import com.sportcourt.core.repository.PricingRuleRepository;
 import com.sportcourt.core.repository.VenueRepository;
@@ -96,9 +97,10 @@ class PricingServiceIntegrationTest {
             time(2026, 3, 30, 9, 0),
             CustomerTier.MEMBER
         ))
-            .isInstanceOf(ResponseStatusException.class)
-            .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
-            .isEqualTo(HttpStatus.BAD_REQUEST);
+            .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                assertThat(ex.getCode()).isEqualTo("PRICING_RULE_MISSING");
+            });
     }
 
     @Test

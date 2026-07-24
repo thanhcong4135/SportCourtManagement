@@ -13,5 +13,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     Optional<PaymentTransaction> findByPaymentRef(String paymentRef);
 
+    Optional<PaymentTransaction> findFirstByBookingIdAndCustomerEmailIsNotNullOrderByRequestedAtDesc(UUID bookingId);
+
     List<PaymentTransaction> findByBookingIdOrderByRequestedAtDesc(UUID bookingId);
 }

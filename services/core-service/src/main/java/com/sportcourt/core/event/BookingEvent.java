@@ -19,6 +19,7 @@ public class BookingEvent {
     private UUID courtId;
     private UUID venueId;
     private UUID customerId;
+    private String customerEmail;
     private BookingStatus status;
     private PaymentStatus paymentStatus;
     private OffsetDateTime startTime;

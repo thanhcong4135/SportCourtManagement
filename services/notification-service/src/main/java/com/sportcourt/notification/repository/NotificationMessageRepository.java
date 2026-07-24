@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -41,4 +42,41 @@ public interface NotificationMessageRepository extends JpaRepository<Notificatio
     Page<NotificationMessage> findByBookingIdOrderByCreatedAtDesc(UUID bookingId, Pageable pageable);
 
     Page<NotificationMessage> findByCustomerIdOrderByCreatedAtDesc(UUID customerId, Pageable pageable);
+
+    Page<NotificationMessage> findByCustomerIdAndChannelAndStatusOrderByCreatedAtDesc(
+        UUID customerId,
+        NotificationChannel channel,
+        NotificationStatus status,
+        Pageable pageable
+    );
+
+    Page<NotificationMessage> findByCustomerIdAndChannelAndStatusAndReadAtIsNullOrderByCreatedAtDesc(
+        UUID customerId,
+        NotificationChannel channel,
+        NotificationStatus status,
+        Pageable pageable
+    );
+
+    long countByCustomerIdAndChannelAndStatusAndReadAtIsNull(
+        UUID customerId,
+        NotificationChannel channel,
+        NotificationStatus status
+    );
+
+    Optional<NotificationMessage> findByIdAndCustomerIdAndChannelAndStatus(
+        UUID id,
+        UUID customerId,
+        NotificationChannel channel,
+        NotificationStatus status
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update NotificationMessage n set n.readAt = :readAt, n.updatedAt = :readAt " +
+        "where n.customerId = :customerId and n.channel = :channel and n.status = :status and n.readAt is null")
+    int markAllRead(
+        @Param("customerId") UUID customerId,
+        @Param("channel") NotificationChannel channel,
+        @Param("status") NotificationStatus status,
+        @Param("readAt") OffsetDateTime readAt
+    );
 }

@@ -151,6 +151,7 @@ public class BookingService {
                 req.startTime(),
                 req.endTime(),
                 req.priceTotal(),
+                req.customerEmail(),
                 normalizedIdempotencyKey
             );
             return toResponse(saved);
@@ -199,6 +200,7 @@ public class BookingService {
                 item.startTime(),
                 item.endTime(),
                 item.priceTotal(),
+                req.customerEmail(),
                 null
             );
             responses.add(toResponse(saved));
@@ -521,6 +523,7 @@ public class BookingService {
         boolean samePayload = existing.getCourt().getId().equals(req.courtId())
             && existing.getStartTime().equals(normalizedStart)
             && existing.getEndTime().equals(normalizedEnd)
+            && Objects.equals(existing.getCustomerEmail(), normalizeCustomerEmail(req.customerEmail()))
             && (req.priceTotal() == null || existing.getPriceTotal().compareTo(req.priceTotal()) == 0);
         if (!samePayload) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key reused with different payload");
@@ -539,6 +542,13 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Idempotency key is too long");
         }
         return normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeCustomerEmail(String customerEmail) {
+        if (customerEmail == null || customerEmail.isBlank()) {
+            return null;
+        }
+        return customerEmail.trim().toLowerCase(Locale.ROOT);
     }
 
     private Booking resolveActionReplay(Booking booking,
@@ -608,6 +618,7 @@ public class BookingService {
                                         OffsetDateTime startTime,
                                         OffsetDateTime endTime,
                                         BigDecimal priceTotal,
+                                        String customerEmail,
                                         String idempotencyKey) {
         OffsetDateTime normalizedStart = normalizeToUtc(startTime);
         OffsetDateTime normalizedEnd = normalizeToUtc(endTime);
@@ -631,6 +642,7 @@ public class BookingService {
         Booking booking = new Booking();
         booking.setCourt(court);
         booking.setCustomerId(customerId);
+        booking.setCustomerEmail(normalizeCustomerEmail(customerEmail));
         booking.setIdempotencyKey(idempotencyKey);
         booking.setStatus(BookingStatus.DRAFT);
         booking.setPaymentStatus(PaymentStatus.UNPAID);
@@ -857,7 +869,8 @@ public class BookingService {
             toResponseOffset(booking.getEndTime()),
             booking.getPriceTotal(),
             booking.getDepositRequired(),
-            booking.getDepositPaid()
+            booking.getDepositPaid(),
+            booking.getCustomerEmail()
         );
     }
 }

@@ -18,7 +18,7 @@ import java.util.UUID;
 public class PaymentOutboxService {
 
     private static final String AGGREGATE_TYPE = "PAYMENT";
-    private static final String SCHEMA_VERSION = "1.0";
+    private static final String SCHEMA_VERSION = "1.1";
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
@@ -72,6 +72,7 @@ public class PaymentOutboxService {
         event.setPaymentId(payment.getId());
         event.setBookingId(payment.getBookingId());
         event.setCustomerId(payment.getCustomerId());
+        event.setCustomerEmail(payment.getCustomerEmail());
         event.setAmount(payment.getAmount());
         event.setProviderReference(payment.getProviderReference());
         event.setOccurredAt(OffsetDateTime.now(ZoneOffset.UTC));

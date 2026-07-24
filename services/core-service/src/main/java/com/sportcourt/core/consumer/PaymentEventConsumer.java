@@ -9,10 +9,12 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
+import java.util.Set;
+
 @Component
 public class PaymentEventConsumer {
 
-    private static final String SUPPORTED_SCHEMA_VERSION = "1.0";
+    private static final Set<String> SUPPORTED_SCHEMA_VERSIONS = Set.of("1.0", "1.1");
 
     private final ObjectMapper objectMapper;
     private final PaymentEventProcessor paymentEventProcessor;
@@ -59,7 +61,7 @@ public class PaymentEventConsumer {
         if (schemaVersion == null || schemaVersion.isBlank()) {
             return;
         }
-        if (!SUPPORTED_SCHEMA_VERSION.equals(schemaVersion)) {
+        if (!SUPPORTED_SCHEMA_VERSIONS.contains(schemaVersion)) {
             throw new IllegalArgumentException("Unsupported payment event schemaVersion: " + schemaVersion);
         }
     }

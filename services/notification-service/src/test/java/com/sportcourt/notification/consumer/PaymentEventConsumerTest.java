@@ -40,6 +40,32 @@ class PaymentEventConsumerTest {
     }
 
     @Test
+    void consumeSchemaOnePointOne_shouldQueueInAppOnly() {
+        NotificationService notificationService = mock(NotificationService.class);
+        PaymentEventConsumer consumer = new PaymentEventConsumer(
+            new ObjectMapper(),
+            new NotificationEventFactory(),
+            notificationService
+        );
+
+        String payload = """
+            {
+              "schemaVersion":"1.1",
+              "eventId":"evt-2-1",
+              "type":"DEPOSIT_SUCCEEDED",
+              "paymentId":"33333333-3333-3333-3333-333333333333",
+              "bookingId":"11111111-1111-1111-1111-111111111111",
+              "customerId":"22222222-2222-2222-2222-222222222222",
+              "customerEmail":"customer@example.com"
+            }
+            """;
+
+        consumer.consume(payload, "payment.events", null);
+
+        verify(notificationService, times(1)).queueFromEvent(any());
+    }
+
+    @Test
     void consume_shouldRejectUnsupportedSchemaVersion() {
         NotificationService notificationService = mock(NotificationService.class);
         PaymentEventConsumer consumer = new PaymentEventConsumer(

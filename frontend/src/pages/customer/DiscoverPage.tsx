@@ -6,6 +6,7 @@ import { VenueFilter } from "../../components/booking/VenueFilter";
 import { EmptyState, ErrorState, SkeletonCard } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { defaultVenueAmenities, venueGalleryPlaceholders } from "../../data/mockMedia";
+import { CustomerNotificationBell } from "../../features/notification/CustomerNotificationBell";
 import { useDiscoverData } from "../../features/venues/useDiscoverData";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { formatCurrency } from "../../lib/api";
@@ -261,6 +262,7 @@ export function DiscoverPage() {
             <h1>{isAuthenticated ? token?.email ?? "SportCourt" : "Khách đặt sân"}</h1>
           </div>
           <div className="discover-hero-actions">
+            <CustomerNotificationBell />
             <Link to={isAuthenticated ? "/account" : "/auth/login"} className="pill-link">
               {isAuthenticated ? "Tài khoản" : "Đăng nhập"}
             </Link>

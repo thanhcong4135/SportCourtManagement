@@ -36,7 +36,36 @@ class BookingEventConsumerTest {
             eq(java.util.UUID.fromString("11111111-1111-1111-1111-111111111111")),
             eq(java.util.UUID.fromString("22222222-2222-2222-2222-222222222222")),
             argThat(amount -> amount.compareTo(new java.math.BigDecimal("400000.00")) == 0),
+            eq(null),
             eq("event-1")
+        );
+    }
+
+    @Test
+    void consumeBookingEvent_shouldPropagateEmailFromSchemaVersionOnePointOne() {
+        PaymentService paymentService = mock(PaymentService.class);
+        BookingEventConsumer consumer = new BookingEventConsumer(new ObjectMapper(), paymentService);
+
+        String payload = """
+            {
+              "schemaVersion":"1.1",
+              "eventId":"event-1-1",
+              "type":"BOOKING_DRAFT_CREATED",
+              "bookingId":"11111111-1111-1111-1111-111111111111",
+              "customerId":"22222222-2222-2222-2222-222222222222",
+              "customerEmail":"customer@example.com",
+              "priceTotal":400000.00
+            }
+            """;
+
+        consumer.consumeBookingEvent(payload, "booking.events", null);
+
+        verify(paymentService).initiateDepositForBookingEvent(
+            eq(java.util.UUID.fromString("11111111-1111-1111-1111-111111111111")),
+            eq(java.util.UUID.fromString("22222222-2222-2222-2222-222222222222")),
+            argThat(amount -> amount.compareTo(new java.math.BigDecimal("400000.00")) == 0),
+            eq("customer@example.com"),
+            eq("event-1-1")
         );
     }
 

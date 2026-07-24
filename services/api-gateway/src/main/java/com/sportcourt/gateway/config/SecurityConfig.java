@@ -64,6 +64,8 @@ public class SecurityConfig {
                 .hasAnyRole("CUSTOMER", "OWNER", "ADMIN")
                 .pathMatchers(HttpMethod.GET, "/api/payments/**")
                 .hasAnyRole("CUSTOMER", "OWNER", "ADMIN", "STAFF", "SUPPORT")
+                .pathMatchers("/api/notifications/me/**")
+                .hasAnyRole("CUSTOMER", "OWNER", "ADMIN")
                 .pathMatchers("/api/notifications/**")
                 .hasAnyRole("ADMIN", "OWNER", "STAFF", "SUPPORT")
                 .pathMatchers("/api/reports/**")

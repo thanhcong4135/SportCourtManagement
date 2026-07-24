@@ -34,6 +34,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -51,12 +52,14 @@ public class BookingController {
                                                               @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                                               @AuthenticationPrincipal Jwt jwt) {
         UUID customerId = resolveCustomerId(req.customerId(), jwt);
+        String customerEmail = resolveCustomerEmail(req.customerEmail(), customerId, jwt);
         BookingDraftRequest effectiveReq = new BookingDraftRequest(
             req.courtId(),
             customerId,
             req.startTime(),
             req.endTime(),
-            req.priceTotal()
+            req.priceTotal(),
+            customerEmail
         );
         BookingResponse response = bookingService.createDraft(effectiveReq, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
@@ -93,7 +96,8 @@ public class BookingController {
         @AuthenticationPrincipal Jwt jwt
     ) {
         UUID customerId = resolveCustomerId(req.customerId(), jwt);
-        BatchBookingDraftRequest effectiveReq = new BatchBookingDraftRequest(customerId, req.items());
+        String customerEmail = resolveCustomerEmail(req.customerEmail(), customerId, jwt);
+        BatchBookingDraftRequest effectiveReq = new BatchBookingDraftRequest(customerId, req.items(), customerEmail);
         BatchBookingDraftResponse response = bookingService.createBatchDraft(effectiveReq);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
@@ -156,6 +160,21 @@ public class BookingController {
             return actorId;
         }
         return requestedCustomerId != null ? requestedCustomerId : actorId;
+    }
+
+    private String resolveCustomerEmail(String requestedCustomerEmail, UUID customerId, Jwt jwt) {
+        UUID actorId = extractActorId(jwt);
+        if (isCustomer(jwt) || actorId.equals(customerId)) {
+            return normalizeEmail(jwt.getClaimAsString("email"));
+        }
+        return normalizeEmail(requestedCustomerEmail);
+    }
+
+    private String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        return email.trim().toLowerCase(Locale.ROOT);
     }
 
     private void verifyCustomerOwnership(BookingResponse booking, Jwt jwt) {

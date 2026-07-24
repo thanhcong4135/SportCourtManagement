@@ -35,6 +35,12 @@ public class NotificationMessage {
     @Column(name = "template_code", length = 128)
     private String templateCode;
 
+    @Column(name = "title", length = 180)
+    private String title;
+
+    @Column(name = "deep_link", length = 512)
+    private String deepLink;
+
     @Lob
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
@@ -75,6 +81,9 @@ public class NotificationMessage {
 
     @Column(name = "sent_at")
     private OffsetDateTime sentAt;
+
+    @Column(name = "read_at")
+    private OffsetDateTime readAt;
 
     @Column(name = "last_error", length = 1024)
     private String lastError;
@@ -123,6 +132,22 @@ public class NotificationMessage {
 
     public void setTemplateCode(String templateCode) {
         this.templateCode = templateCode;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getDeepLink() {
+        return deepLink;
+    }
+
+    public void setDeepLink(String deepLink) {
+        this.deepLink = deepLink;
     }
 
     public String getMessage() {
@@ -227,6 +252,14 @@ public class NotificationMessage {
 
     public void setSentAt(OffsetDateTime sentAt) {
         this.sentAt = sentAt;
+    }
+
+    public OffsetDateTime getReadAt() {
+        return readAt;
+    }
+
+    public void setReadAt(OffsetDateTime readAt) {
+        this.readAt = readAt;
     }
 
     public String getLastError() {
