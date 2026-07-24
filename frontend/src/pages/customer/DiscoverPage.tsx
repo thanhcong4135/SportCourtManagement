@@ -294,6 +294,18 @@ export function DiscoverPage() {
         onClear={clearFilters}
       />
 
+      <section className="discover-promo" aria-label="Tìm và đặt sân thể thao">
+        <div className="discover-promo-copy">
+          <span>LỊCH TRỐNG CẬP NHẬT THEO THỜI GIAN THỰC</span>
+          <h2>Tìm sân phù hợp, chọn giờ và đặt lịch trong vài phút</h2>
+          <p>So sánh sân, trạng thái còn chỗ và bảng giá ngay trên một màn hình.</p>
+        </div>
+        <div className="discover-promo-stat">
+          <strong>{cards.length}</strong>
+          <span>sân phù hợp</span>
+        </div>
+      </section>
+
       {errorUi ? (
         <ErrorState message={errorUi.message} traceId={errorUi.traceId} onRetry={() => void discoverQuery.refetch()} />
       ) : null}
