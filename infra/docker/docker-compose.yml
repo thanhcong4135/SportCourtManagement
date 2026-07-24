@@ -170,8 +170,8 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: 123456
       APP_SECURITY_JWT_ISSUER: https://auth.sportcourt.local
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev-google-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev-google-client-secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID must be set for Google OAuth}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET must be set for Google OAuth}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/login/oauth2/code/google}
       OAUTH2_AUTHORIZED_REDIRECT_URI: ${OAUTH2_AUTHORIZED_REDIRECT_URI:-http://localhost:5173/oauth2/redirect}
     ports:
